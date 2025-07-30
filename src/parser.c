@@ -9,6 +9,7 @@ static ASTNode *parse_grouping(Parser *parser, Token token);
 static ASTNode *parse_binary(Parser *parser, ASTNode *left, Token token);
 
 #define MAX_TOKEN_TYPE 64
+#define INITIAL_CAPACITY 8
 
 static ParseRule parse_rules[MAX_TOKEN_TYPE];
 
@@ -138,7 +139,30 @@ void parser_init(Parser *parser, Lexer *lexer) {
   init_parse_rules();
 }
 
-ASTNode *parse(Parser *parser) { return parse_expression(parser, 0); }
+ASTProgram parse(Parser *parser) {
+  ASTProgram program;
+  program.nodes = malloc(sizeof(ASTNode *) * INITIAL_CAPACITY);
+  program.count = 0;
+  program.capacity = INITIAL_CAPACITY;
+
+  while (parser->current.type != TOKEN_EOF && !parser->had_error) {
+    ASTNode *node = parse_expression(parser, 0);
+    if (!node)
+      break; // stop on error
+
+    // Resize if needed
+    if (program.count >= program.capacity) {
+      program.capacity *= 2;
+      program.nodes =
+          realloc(program.nodes, sizeof(ASTNode *) * program.capacity);
+    }
+    program.nodes[program.count++] = node;
+
+    // Optionally: skip separators (like semicolons or newlines) here
+  }
+
+  return program;
+}
 
 void parser_print_ast(ASTNode *node) {
   if (!node) {

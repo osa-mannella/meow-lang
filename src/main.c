@@ -16,9 +16,9 @@ int main(int argc, char *argv[]) {
   Parser parser;
   parser_init(&parser, &lexer);
 
-  ASTNode *ast = parse(&parser);
-  parser_print_ast(ast);
-  parser_free_ast(ast);
+  ASTProgram program = parse(&parser);
+  parser_print_ast(program.nodes[1]);
+  parser_free_ast(program.nodes[1]);
   free(source);
   return 0;
 }
