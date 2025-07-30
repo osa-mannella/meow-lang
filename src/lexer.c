@@ -14,7 +14,6 @@ void lexer_init(const char *source, Lexer *lexer) {
 
 void lexer_debug(Lexer *lexer) {
   Token t = lexer_next(lexer);
-
   while (t.type != TOKEN_EOF) {
     printf("Token: %s\n", token_type_name(t.type));
     t = lexer_next(lexer);
@@ -163,9 +162,6 @@ Token lexer_next(Lexer *lexer) {
     return make_token(TOKEN_EOF, lexer);
 
   char c = advance(lexer);
-  if (c == '\0') {
-    return make_token(TOKEN_EOF, lexer);
-  }
 
   // Identifiers and keywords
   if (isalpha(c) || c == '_') {

@@ -45,9 +45,14 @@ ASTNode *parse_expression(Parser *parser, int precedence) {
     return NULL;
   }
 
+  printf("Calling nud for token type %d ('%.*s'), nud pointer: %p\n",
+         parser->previous.type, parser->previous.length, parser->previous.start,
+         (void *)prefix_rule->nud);
+
   ASTNode *left = prefix_rule->nud(parser, parser->previous);
 
-  while (precedence < get_rule(parser->current.type)->lbp) {
+  while (precedence < get_rule(parser->current.type)->lbp &&
+         parser->current.type != TOKEN_EOF) {
     parser_advance(parser);
     ParseRule *infix_rule = get_rule(parser->previous.type);
     if (!infix_rule->led)
@@ -58,6 +63,7 @@ ASTNode *parse_expression(Parser *parser, int precedence) {
 }
 
 static ASTNode *parse_literal(Parser *parser, Token token) {
+  printf("parse_literal\n");
   ASTNode *node = malloc(sizeof(ASTNode));
   node->type = AST_LITERAL;
   node->literal.token = token;
@@ -65,6 +71,7 @@ static ASTNode *parse_literal(Parser *parser, Token token) {
 }
 
 static ASTNode *parse_grouping(Parser *parser, Token token) {
+  printf("parse_grouping\n");
   ASTNode *expr = parse_expression(parser, 0);
   if (parser->current.type != TOKEN_RPAREN) {
     printf("Parse error: Expected ')'.\n");
@@ -91,9 +98,13 @@ static ASTNode *parse_binary(Parser *parser, ASTNode *left, Token token) {
 }
 
 static ASTNode *nud_null(Parser *parser, Token token) {
-  printf("Parse error: Unexpected token '%.*s'\n", token.length, token.start);
-  parser->had_error = 1;
-  return NULL;
+  if (token.type == TOKEN_EOF) {
+    return NULL;
+  } else {
+    printf("Parse error: Unexpected token '%.*s'\n", token.length, token.start);
+    parser->had_error = 1;
+    return NULL;
+  }
 }
 static ASTNode *led_null(Parser *parser, ASTNode *left, Token token) {
   printf("Parse error: Unexpected infix operator '%.*s'\n", token.length,
@@ -129,7 +140,7 @@ void parser_init(Parser *parser, Lexer *lexer) {
   parser->had_error = 0;
   parser->panic_mode = 0;
   parser->current = lexer_next(lexer);
-  parser->previous = parser->current; // doesn't matter at start
+  parser->previous = parser->current;
   init_parse_rules();
 }
 
@@ -137,7 +148,7 @@ ASTNode *parse(Parser *parser) { return parse_expression(parser, 0); }
 
 void parser_print_ast(ASTNode *node) {
   if (!node) {
-    printf("NULL");
+    printf("NULL\n");
     return;
   }
   switch (node->type) {
