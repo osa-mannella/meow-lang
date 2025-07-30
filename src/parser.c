@@ -71,7 +71,6 @@ static ASTNode *parse_statement(Parser *parser) {
   if (parser->current.type == TOKEN_LET) {
     return parse_let_statement(parser);
   }
-  // You can add more statement types here (if, match, etc.)
   return parse_expression_statement(parser);
 }
 
