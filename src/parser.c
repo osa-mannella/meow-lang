@@ -23,6 +23,43 @@ static void parser_advance(Parser *parser)
   parser->current = lexer_next(parser->lexer);
 }
 
+static int parser_match(Parser *parser, TokenType type)
+{
+  if (parser->current.type == type)
+  {
+    parser_advance(parser);
+    return 1;
+  }
+  return 0;
+}
+
+static ASTNode *make_node(ASTNodeType type, Token token)
+{
+  ASTNode *node = malloc(sizeof(ASTNode));
+  node->type = type;
+
+  // Optionally store the token somewhere if needed
+  // (if your node type has no token field, you can ignore this)
+
+  return node;
+}
+
+static int parser_check(Parser *parser, TokenType type)
+{
+  return parser->current.type == type;
+}
+
+static void parser_consume(Parser *parser, TokenType type, const char *message)
+{
+  if (parser->current.type == type)
+  {
+    parser_advance(parser);
+    return;
+  }
+  printf("Parse error: %s\n", message);
+  parser->had_error = 1;
+}
+
 static ASTNode *parse_expression(Parser *parser, int precedence)
 {
   parser_advance(parser);
@@ -434,6 +471,56 @@ static ASTNode *parse_function_statement(Parser *parser)
   return node;
 }
 
+static ASTNode *led_dot(Parser *parser, ASTNode *left, Token dot)
+{
+  // Expect an identifier after the dot
+  parser_consume(parser, TOKEN_IDENTIFIER, "Expected property name after '.'");
+
+  ASTNode *node = make_node(AST_PROPERTY_ACCESS, dot);
+  node->property_access.object = left;               // whatever was on the left
+  node->property_access.property = parser->previous; // the property token
+
+  return node;
+}
+
+static ASTNode *parse_call(Parser *parser, ASTNode *callee, Token token)
+{
+  ASTNode *node = make_node(AST_CALL, token);
+  node->call.callee = callee;
+
+  // Parse arguments
+  ASTNode **args = NULL;
+  int arg_count = 0;
+
+  if (!parser_check(parser, TOKEN_RPAREN))
+  {
+    do
+    {
+      if (arg_count >= 255)
+      {
+        printf("Too many arguments in function call.\n");
+        parser->had_error = 1;
+        break;
+      }
+
+      ASTNode *arg = parse_expression(parser, 0);
+      if (!arg)
+        break;
+
+      args = realloc(args, sizeof(ASTNode *) * (arg_count + 1));
+      args[arg_count++] = arg;
+
+    } while (parser_match(parser, TOKEN_COMMA));
+  }
+
+  parser_consume(parser, TOKEN_RPAREN, "Expected ')' after arguments.");
+
+  node->call.arguments = args;
+  node->call.arg_count = arg_count;
+
+  return node;
+}
+
 static void init_parse_rules()
 {
   for (int i = 0; i < MAX_TOKEN_TYPE; i++)
@@ -448,6 +535,7 @@ static void init_parse_rules()
   parse_rules[TOKEN_NUMBER].nud = parse_literal;
   parse_rules[TOKEN_IDENTIFIER].nud = parse_variable;
   parse_rules[TOKEN_FN].nud = parse_lambda_expression;
+  parse_rules[TOKEN_STRING].nud = parse_literal;
 
   // Binary operators
   parse_rules[TOKEN_PLUS].led = parse_binary;
@@ -458,6 +546,10 @@ static void init_parse_rules()
   parse_rules[TOKEN_STAR].lbp = 20;
   parse_rules[TOKEN_SLASH].led = parse_binary;
   parse_rules[TOKEN_SLASH].lbp = 20;
+  parse_rules[TOKEN_LPAREN].led = parse_call;
+  parse_rules[TOKEN_LPAREN].lbp = 30;
+  parse_rules[TOKEN_DOT].led = led_dot;
+  parse_rules[TOKEN_DOT].lbp = 40;
 }
 
 void parser_init(Parser *parser, Lexer *lexer)

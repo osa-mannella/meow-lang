@@ -18,6 +18,7 @@ typedef enum
   AST_FUNCTION_STATEMENT,
   AST_LAMBDA_EXPRESSION,
   AST_MATCH_STATEMENT,
+  AST_PROPERTY_ACCESS
 } ASTNodeType;
 
 typedef struct ASTNode ASTNode;
@@ -98,6 +99,12 @@ struct ASTNode
       MatchArm *arms;
       int arm_count;
     } match_statement;
+
+    struct
+    {
+      ASTNode *object;
+      Token property;
+    } property_access;
   };
 };
 

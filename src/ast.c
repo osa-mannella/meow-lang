@@ -120,12 +120,14 @@ void parser_print_ast_node(ASTNode *node)
     case AST_LITERAL:
         print_token(&node->literal.token);
         break;
+
     case AST_UNARY:
         print_token(&node->unary.op);
         printf("(");
         parser_print_ast_node(node->unary.right);
         printf(")");
         break;
+
     case AST_BINARY:
         printf("(");
         parser_print_ast_node(node->binary.left);
@@ -135,19 +137,23 @@ void parser_print_ast_node(ASTNode *node)
         parser_print_ast_node(node->binary.right);
         printf(")");
         break;
+
     case AST_VARIABLE:
         print_token(&node->variable.name);
         break;
+
     case AST_GROUPING:
         printf("(");
         parser_print_ast_node(node->grouping.expression);
         printf(")");
         break;
+
     case AST_ASSIGNMENT:
         print_token(&node->assignment.name);
         printf(" = ");
         parser_print_ast_node(node->assignment.value);
         break;
+
     case AST_CALL:
         parser_print_ast_node(node->call.callee);
         printf("(");
@@ -159,18 +165,28 @@ void parser_print_ast_node(ASTNode *node)
         }
         printf(")");
         break;
+
+    case AST_PROPERTY_ACCESS:
+        parser_print_ast_node(node->property_access.object);
+        printf(".");
+        print_token(&node->property_access.property);
+        break;
+
     case AST_ERROR:
         printf("<error>");
         break;
+
     case AST_LET_STATEMENT:
         printf("let ");
         print_token(&node->let_statement.name);
         printf(" = ");
         parser_print_ast_node(node->let_statement.initializer);
         break;
+
     case AST_EXPRESSION_STATEMENT:
         parser_print_ast_node(node->expression_statement.expression);
         break;
+
     case AST_FUNCTION_STATEMENT:
         printf("func ");
         print_token(&node->function_statement.name);
@@ -190,6 +206,7 @@ void parser_print_ast_node(ASTNode *node)
         }
         printf(" }");
         break;
+
     case AST_LAMBDA_EXPRESSION:
         printf("fn(");
         for (int i = 0; i < node->lambda.param_count; i++)
@@ -207,6 +224,7 @@ void parser_print_ast_node(ASTNode *node)
         }
         printf(" }");
         break;
+
     case AST_MATCH_STATEMENT:
         printf("match ");
         parser_print_ast_node(node->match_statement.value);

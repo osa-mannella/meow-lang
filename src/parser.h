@@ -35,6 +35,7 @@ static ASTNode *parse_function_statement(Parser *parser);
 static ASTNode *parse_match_statement(Parser *parser);
 static void parse_block(Parser *parser, ASTNode ***body_nodes, int *body_count);
 static void parse_parameter_list(Parser *parser, Token **params, int *param_count);
+static ASTNode *parse_call(Parser *parser, ASTNode *callee, Token token);
 
 // Lookup table for tokens → parse rules
 static ParseRule *get_rule(TokenType type);
