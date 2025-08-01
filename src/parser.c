@@ -121,7 +121,7 @@ static ASTNode *parse_match_statement(Parser *parser)
   {
     printf("Parse error: Expected '{' after match value.\n");
     parser->had_error = 1;
-    parser_free_ast(value);
+    free_node(value);
     return NULL;
   }
   parser_advance(parser); // consume '{'
@@ -140,7 +140,7 @@ static ASTNode *parse_match_statement(Parser *parser)
     {
       printf("Parse error: Expected '->' after pattern in match arm.\n");
       parser->had_error = 1;
-      parser_free_ast(pattern);
+      free_node(pattern);
       goto error_cleanup;
     }
     parser_advance(parser); // consume '->'
@@ -180,11 +180,11 @@ static ASTNode *parse_match_statement(Parser *parser)
   return node;
 
 error_cleanup:
-  parser_free_ast(value);
+  free_node(value);
   for (int i = 0; i < arms_count; i++)
   {
-    parser_free_ast(arms[i].pattern);
-    parser_free_ast(arms[i].expression);
+    free_node(arms[i].pattern);
+    free_node(arms[i].expression);
   }
   free(arms);
   return NULL;
@@ -235,7 +235,7 @@ static ASTNode *parse_grouping(Parser *parser, Token token)
   {
     printf("Parse error: Expected ')'.\n");
     parser->had_error = 1;
-    parser_free_ast(expr);
+    free_node(expr);
     return NULL;
   }
   parser_advance(parser); // consume ')'
