@@ -136,12 +136,6 @@ static Token identifier(Lexer *lexer)
     return make_token(TOKEN_ASYNC, lexer);
   if (length == 5 && strncmp(lexer->start, "await", 5) == 0)
     return make_token(TOKEN_AWAIT, lexer);
-  if (length == 5 && strncmp(lexer->start, "throw", 5) == 0)
-    return make_token(TOKEN_THROW, lexer);
-  if (length == 3 && strncmp(lexer->start, "try", 3) == 0)
-    return make_token(TOKEN_TRY, lexer);
-  if (length == 5 && strncmp(lexer->start, "catch", 5) == 0)
-    return make_token(TOKEN_CATCH, lexer);
   if (length == 6 && strncmp(lexer->start, "import", 6) == 0)
     return make_token(TOKEN_IMPORT, lexer);
 
@@ -292,6 +286,8 @@ Token lexer_next(Lexer *lexer)
   case '|':
     if (match('|', lexer))
       return make_token(TOKEN_OR, lexer);
+    if (match('>', lexer))
+      return make_token(TOKEN_PIPELINE, lexer);
     return make_token(TOKEN_PIPE, lexer);
 
   case '?':

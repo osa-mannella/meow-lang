@@ -208,14 +208,83 @@ IO.write("file.txt", "content")
 
 ---
 
-## Error Handling
+## Pipeline Operator (`|>`) and Error Propagation (`let!`)
+
+### Pipeline Operator (`|>`)
+
+The pipeline operator `|>` allows you to chain function calls, passing the result of one operation into the next. This is especially useful when working with functions that return `Maybe` or `Result` types, enabling fluent error handling and functional programming styles.
 
 ```mirrow
-throw "Something went wrong"
-try {
-    riskyOperation()
-} catch (err) {
-    IO.print("Error: " + err)
+let result = getUser("osa")
+    |> parseUser
+    |> validateUser
+```
+
+This is equivalent to:
+
+```mirrow
+let result = validateUser(parseUser(getUser("osa")))
+```
+
+If any function in the chain returns an error (`Err`) or absence (`None`), the pipeline will propagate that value.
+
+#### Built-in Pipeline Helpers
+
+- `map` applies a function to the inner value (if present).
+- `flatMap` chains another function that returns a `Maybe` or `Result`.
+- `unwrapOr` provides a fallback/default value.
+- `mapError` transforms an error value.
+
+#### Example
+
+```mirrow
+readFile("config.json")
+    |> Result.map(parseConfig)
+    |> Result.flatMap(connectDatabase)
+    |> Result.unwrapOr(defaultDB)
+```
+
+### Error Propagation with `let!`
+
+The `let!` binding is used within functions that return a `Result` or `Maybe` type. It simplifies error handling by automatically propagating errors or absence, letting you write clear, linear code without manual matching.
+
+```mirrow
+func setup() -> Result<Database, SetupError> {
+    let! fileData = readFile("config.json")   // returns Result<String, IOError>
+    let! config   = parseConfig(fileData)      // returns Result<Config, ParseError>
+    connectDatabase(config)                    // returns Result<Database, SetupError>
+}
+```
+
+If any step returns an error (`Err`) or absence (`None`), the function immediately returns that error/absence.
+
+#### Equivalent Expanded Form
+
+```mirrow
+func setup() -> Result<Database, SetupError> {
+    match readFile("config.json") {
+        Ok(fileData) =>
+            match parseConfig(fileData) {
+                Ok(config) => connectDatabase(config)
+                Err(e) => return Err(e)
+            }
+        Err(e) => return Err(e)
+    }
+}
+```
+
+#### Rules
+
+- `let!` may only be used inside functions returning `Result` or `Maybe`.
+- Using `let!` elsewhere will produce a compile or runtime error.
+
+#### Example with Maybe
+
+```mirrow
+func middleName(user) -> Maybe<String> {
+    let! name = user.name         // Maybe<String>
+    let! parts = splitName(name)  // Maybe<[String]>
+    parts[1]
 }
 ```
 

@@ -51,7 +51,7 @@ typedef enum {
   TOKEN_TRY,
   TOKEN_CATCH,
   TOKEN_IMPORT,
-
+  TOKEN_PIPELINE
 } TokenType;
 
 typedef struct {

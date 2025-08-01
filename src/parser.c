@@ -14,12 +14,184 @@ static ASTNode *parse_function_statement(Parser *parser);
 static ASTNode *parse_match_statement(Parser *parser);
 static ASTNode *parse_expression_statement(Parser *parser);
 
+// ADD THESE
+static void parser_advance(Parser *parser);
+static void parser_consume(Parser *parser, TokenType type, const char *message);
+static ASTNode *parse_expression(Parser *parser, int precedence);
+
 #define MAX_TOKEN_TYPE 64
 #define INITIAL_CAPACITY 8
 
 static ParseRule parse_rules[MAX_TOKEN_TYPE];
 
 ParseRule *get_rule(TokenType type) { return &parse_rules[type]; }
+
+static ASTNode *parse_struct_literal(Parser *parser, Token lbrace)
+{
+  Token *keys = NULL;
+  ASTNode **values = NULL;
+  int count = 0, capacity = 0;
+
+  if (parser->current.type != TOKEN_RBRACE)
+  {
+    do
+    {
+      if (parser->current.type != TOKEN_IDENTIFIER)
+      {
+        printf("Parse error: Expected property name in struct literal.\n");
+        parser->had_error = 1;
+        goto error;
+      }
+      Token key = parser->current;
+      parser_advance(parser);
+
+      parser_consume(parser, TOKEN_EQUAL, "Expected '=' after property name.");
+      ASTNode *value = parse_expression(parser, 0);
+      if (!value)
+        goto error;
+
+      if (count >= capacity)
+      {
+        capacity = capacity == 0 ? 4 : capacity * 2;
+        keys = realloc(keys, sizeof(Token) * capacity);
+        values = realloc(values, sizeof(ASTNode *) * capacity);
+      }
+      keys[count] = key;
+      values[count] = value;
+      count++;
+
+      if (parser->current.type == TOKEN_COMMA)
+        parser_advance(parser);
+
+    } while (parser->current.type != TOKEN_RBRACE && parser->current.type != TOKEN_EOF);
+  }
+
+  parser_consume(parser, TOKEN_RBRACE, "Expected '}' after struct literal.");
+
+  ASTNode *node = malloc(sizeof(ASTNode));
+  node->type = AST_STRUCT_LITERAL;
+  node->struct_literal.keys = keys;
+  node->struct_literal.values = values;
+  node->struct_literal.count = count;
+  return node;
+
+error:
+  free(keys);
+  free(values);
+  return NULL;
+}
+
+static ASTNode *parse_struct_update(Parser *parser, ASTNode *base)
+{
+  // parser_advance(parser); // consume '{'
+
+  Token *keys = NULL;
+  ASTNode **values = NULL;
+  int count = 0, capacity = 0;
+
+  if (parser->current.type != TOKEN_RBRACE)
+  {
+    do
+    {
+      if (parser->current.type != TOKEN_IDENTIFIER)
+      {
+        printf("Parse error: Expected property name in struct update.\n");
+        parser->had_error = 1;
+        goto error;
+      }
+      Token key = parser->current;
+      parser_advance(parser);
+
+      parser_consume(parser, TOKEN_EQUAL, "Expected '=' after property name.");
+      ASTNode *value = parse_expression(parser, 0);
+      if (!value)
+        goto error;
+
+      if (count >= capacity)
+      {
+        capacity = capacity == 0 ? 4 : capacity * 2;
+        keys = realloc(keys, sizeof(Token) * capacity);
+        values = realloc(values, sizeof(ASTNode *) * capacity);
+      }
+      keys[count] = key;
+      values[count] = value;
+      count++;
+
+      if (parser->current.type == TOKEN_COMMA)
+        parser_advance(parser);
+
+    } while (parser->current.type != TOKEN_RBRACE && parser->current.type != TOKEN_EOF);
+  }
+
+  parser_consume(parser, TOKEN_RBRACE, "Expected '}' after struct update.");
+
+  ASTNode *node = malloc(sizeof(ASTNode));
+  node->type = AST_STRUCT_UPDATE;
+  node->struct_update.base = base;
+  node->struct_update.keys = keys;
+  node->struct_update.values = values;
+  node->struct_update.count = count;
+  return node;
+
+error:
+  free(keys);
+  free(values);
+  return NULL;
+}
+
+static ASTNode *parse_import_statement(Parser *parser)
+{
+  parser_advance(parser); // consume 'import'
+
+  if (parser->current.type != TOKEN_STRING)
+  {
+    printf("Parse error: Expected string literal after 'import'.\n");
+    parser->had_error = 1;
+    return NULL;
+  }
+  Token path = parser->current;
+  parser_advance(parser); // consume the string literal
+
+  ASTNode *node = malloc(sizeof(ASTNode));
+  node->type = AST_IMPORT_STATEMENT;
+  node->import_statement.path = path;
+  return node;
+}
+
+static ASTNode *parse_list_literal(Parser *parser, Token lbracket)
+{
+  ASTNode **elements = NULL;
+  int count = 0, capacity = 0;
+
+  if (parser->current.type != TOKEN_RBRACKET)
+  {
+    do
+    {
+      ASTNode *element = parse_expression(parser, 0);
+      if (!element)
+        return NULL;
+
+      if (count >= capacity)
+      {
+        capacity = capacity == 0 ? 4 : capacity * 2;
+        elements = realloc(elements, sizeof(ASTNode *) * capacity);
+      }
+      elements[count++] = element;
+
+      if (parser->current.type == TOKEN_COMMA)
+        parser_advance(parser);
+
+    } while (parser->current.type != TOKEN_RBRACKET && parser->current.type != TOKEN_EOF);
+  }
+
+  parser_consume(parser, TOKEN_RBRACKET, "Expected ']' after list literal.");
+
+  ASTNode *node = malloc(sizeof(ASTNode));
+  node->type = AST_LIST_LITERAL;
+  node->list_literal.elements = elements;
+  node->list_literal.count = count;
+  return node;
+}
 
 static void parser_advance(Parser *parser)
 {
@@ -99,6 +271,10 @@ static ASTNode *parse_literal(Parser *parser, Token token)
 
 static ASTNode *parse_statement(Parser *parser)
 {
+  if (parser->current.type == TOKEN_IMPORT)
+  {
+    return parse_import_statement(parser);
+  }
   if (parser->current.type == TOKEN_LET)
   {
     return parse_let_statement(parser);
@@ -112,6 +288,11 @@ static ASTNode *parse_statement(Parser *parser)
     return parse_match_statement(parser);
   }
   return parse_expression_statement(parser);
+}
+
+static ASTNode *led_struct_update(Parser *parser, ASTNode *left, Token lbrace)
+{
+  return parse_struct_update(parser, left);
 }
 
 static ASTNode *parse_match_statement(Parser *parser)
@@ -206,10 +387,19 @@ static ASTNode *parse_expression_statement(Parser *parser)
 static ASTNode *parse_let_statement(Parser *parser)
 {
   parser_advance(parser); // consume 'let'
-  Token name = parser->current;
-  if (parser->current.type != TOKEN_IDENTIFIER)
+
+  // Check if next token is '!' for let!
+  int is_bang = 0;
+  if (parser->current.type == TOKEN_BANG)
   {
-    printf("Parse error: Expected variable name after 'let'.\n");
+    is_bang = 1;
+    parser_advance(parser); // consume '!'
+  }
+
+  Token name = parser->current;
+  if (name.type != TOKEN_IDENTIFIER)
+  {
+    printf("Parse error: Expected variable name after 'let' or 'let!'.\n");
     parser->had_error = 1;
     return NULL;
   }
@@ -224,11 +414,32 @@ static ASTNode *parse_let_statement(Parser *parser)
   parser_advance(parser); // consume '='
 
   ASTNode *initializer = parse_expression(parser, 0);
+  if (!initializer)
+  {
+    return NULL; // propagate error
+  }
 
   ASTNode *node = malloc(sizeof(ASTNode));
-  node->type = AST_LET_STATEMENT;
-  node->let_statement.name = name;
-  node->let_statement.initializer = initializer;
+  if (!node)
+  {
+    printf("Memory allocation failed.\n");
+    parser->had_error = 1;
+    return NULL;
+  }
+
+  if (is_bang)
+  {
+    node->type = AST_LET_BANG_STATEMENT;
+    node->let_bang_statement.name = name;
+    node->let_bang_statement.initializer = initializer;
+  }
+  else
+  {
+    node->type = AST_LET_STATEMENT;
+    node->let_statement.name = name;
+    node->let_statement.initializer = initializer;
+  }
+
   return node;
 }
 
@@ -261,11 +472,21 @@ static ASTNode *parse_binary(Parser *parser, ASTNode *left, Token token)
 {
   int precedence = get_rule(token.type)->lbp;
   ASTNode *right = parse_expression(parser, precedence);
+
   ASTNode *node = malloc(sizeof(ASTNode));
-  node->type = AST_BINARY;
-  node->binary.left = left;
-  node->binary.op = token;
-  node->binary.right = right;
+  if (token.type == TOKEN_PIPELINE)
+  {
+    node->type = AST_PIPELINE;
+    node->pipeline.left = left;
+    node->pipeline.right = right;
+  }
+  else
+  {
+    node->type = AST_BINARY;
+    node->binary.left = left;
+    node->binary.op = token;
+    node->binary.right = right;
+  }
   return node;
 }
 
@@ -540,8 +761,12 @@ static void init_parse_rules()
   parse_rules[TOKEN_IDENTIFIER].nud = parse_variable;
   parse_rules[TOKEN_FN].nud = parse_lambda_expression;
   parse_rules[TOKEN_STRING].nud = parse_literal;
+  parse_rules[TOKEN_LBRACKET].nud = parse_list_literal;
+  parse_rules[TOKEN_LBRACE].nud = parse_struct_literal;
 
   // Binary operators
+  parse_rules[TOKEN_PIPELINE].led = parse_binary;
+  parse_rules[TOKEN_PIPELINE].lbp = 5; // Lower than arithmetic, higher than assignment
   parse_rules[TOKEN_PLUS].led = parse_binary;
   parse_rules[TOKEN_PLUS].lbp = 10;
   parse_rules[TOKEN_MINUS].led = parse_binary;
@@ -554,6 +779,8 @@ static void init_parse_rules()
   parse_rules[TOKEN_LPAREN].lbp = 30;
   parse_rules[TOKEN_DOT].led = led_dot;
   parse_rules[TOKEN_DOT].lbp = 40;
+  parse_rules[TOKEN_LBRACE].led = led_struct_update;
+  parse_rules[TOKEN_LBRACE].lbp = 50; // higher than assignment, lower than calls
 }
 
 void parser_init(Parser *parser, Lexer *lexer)

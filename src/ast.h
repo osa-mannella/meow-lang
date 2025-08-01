@@ -18,7 +18,13 @@ typedef enum
   AST_FUNCTION_STATEMENT,
   AST_LAMBDA_EXPRESSION,
   AST_MATCH_STATEMENT,
-  AST_PROPERTY_ACCESS
+  AST_PROPERTY_ACCESS,
+  AST_LET_BANG_STATEMENT,
+  AST_PIPELINE,
+  AST_IMPORT_STATEMENT,
+  AST_LIST_LITERAL,
+  AST_STRUCT_LITERAL,
+  AST_STRUCT_UPDATE,
 } ASTNodeType;
 
 typedef struct ASTNode ASTNode;
@@ -105,6 +111,38 @@ struct ASTNode
       ASTNode *object;
       Token property;
     } property_access;
+    struct
+    {
+      Token name;
+      ASTNode *initializer;
+    } let_bang_statement;
+    struct
+    {
+      ASTNode *left;
+      ASTNode *right;
+    } pipeline;
+    struct
+    {
+      Token path;
+    } import_statement;
+    struct
+    {
+      ASTNode **elements;
+      int count;
+    } list_literal;
+    struct
+    {
+      Token *keys;
+      ASTNode **values;
+      int count;
+    } struct_literal;
+    struct
+    {
+      ASTNode *base;
+      Token *keys;
+      ASTNode **values;
+      int count;
+    } struct_update;
   };
 };
 

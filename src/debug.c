@@ -1,7 +1,9 @@
 #include "lexer.h"
 
-const char *token_type_name(TokenType type) {
-  switch (type) {
+const char *token_type_name(TokenType type)
+{
+  switch (type)
+  {
   case TOKEN_IDENTIFIER:
     return "TOKEN_IDENTIFIER";
   case TOKEN_NUMBER:
@@ -100,6 +102,8 @@ const char *token_type_name(TokenType type) {
     return "TOKEN_IMPORT";
   case TOKEN_PIPE:
     return "TOKEN_PIPE";
+  case TOKEN_PIPELINE:
+    return "TOKEN_PIPELINE";
   default:
     return "TOKEN_UNKNOWN";
   }

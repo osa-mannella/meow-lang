@@ -1,5 +1,3 @@
-func test(test) {
-match test {
-4 -> IO.print("mommy")
-}
-}
+let a = {meow = true, name = "this"}
+
+let b = a {meow = false}

@@ -115,6 +115,7 @@ void parser_print_ast_node(ASTNode *node)
         printf("NULL");
         return;
     }
+
     switch (node->type)
     {
     case AST_LITERAL:
@@ -183,6 +184,13 @@ void parser_print_ast_node(ASTNode *node)
         parser_print_ast_node(node->let_statement.initializer);
         break;
 
+    case AST_LET_BANG_STATEMENT:
+        printf("let! ");
+        print_token(&node->let_bang_statement.name);
+        printf(" = ");
+        parser_print_ast_node(node->let_bang_statement.initializer);
+        break;
+
     case AST_EXPRESSION_STATEMENT:
         parser_print_ast_node(node->expression_statement.expression);
         break;
@@ -238,6 +246,57 @@ void parser_print_ast_node(ASTNode *node)
             printf(",\n");
         }
         printf("}");
+        break;
+
+    case AST_PIPELINE:
+        printf("(");
+        parser_print_ast_node(node->pipeline.left);
+        printf(" |> ");
+        parser_print_ast_node(node->pipeline.right);
+        printf(")");
+        break;
+
+    case AST_IMPORT_STATEMENT:
+        printf("import ");
+        print_token(&node->import_statement.path);
+        break;
+
+    case AST_LIST_LITERAL:
+        printf("[");
+        for (int i = 0; i < node->list_literal.count; i++)
+        {
+            parser_print_ast_node(node->list_literal.elements[i]);
+            if (i < node->list_literal.count - 1)
+                printf(", ");
+        }
+        printf("]");
+        break;
+
+    case AST_STRUCT_LITERAL:
+        printf("{ ");
+        for (int i = 0; i < node->struct_literal.count; i++)
+        {
+            print_token(&node->struct_literal.keys[i]);
+            printf(" = ");
+            parser_print_ast_node(node->struct_literal.values[i]);
+            if (i < node->struct_literal.count - 1)
+                printf(", ");
+        }
+        printf(" }");
+        break;
+
+    case AST_STRUCT_UPDATE:
+        parser_print_ast_node(node->struct_update.base);
+        printf(" { ");
+        for (int i = 0; i < node->struct_update.count; i++)
+        {
+            print_token(&node->struct_update.keys[i]);
+            printf(" = ");
+            parser_print_ast_node(node->struct_update.values[i]);
+            if (i < node->struct_update.count - 1)
+                printf(", ");
+        }
+        printf(" }");
         break;
     }
 }
