@@ -119,6 +119,5 @@ void free_node(ASTNode *node);
 void parser_free_ast(ASTProgram *program);
 void parser_print_ast(ASTProgram *program);
 void parser_print_ast_node(ASTNode *node);
-static void print_token(const Token *token);
 
 #endif

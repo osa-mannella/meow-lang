@@ -9,6 +9,10 @@ static ASTNode *parse_literal(Parser *parser, Token token);
 static ASTNode *parse_grouping(Parser *parser, Token token);
 static ASTNode *parse_binary(Parser *parser, ASTNode *left, Token token);
 static ASTNode *parse_variable(Parser *parser, Token token);
+static ASTNode *parse_let_statement(Parser *parser);
+static ASTNode *parse_function_statement(Parser *parser);
+static ASTNode *parse_match_statement(Parser *parser);
+static ASTNode *parse_expression_statement(Parser *parser);
 
 #define MAX_TOKEN_TYPE 64
 #define INITIAL_CAPACITY 8

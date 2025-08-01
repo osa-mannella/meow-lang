@@ -2,7 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-static void print_token(const Token *token)
+void print_token(const Token *token)
 {
     if (token)
     {
