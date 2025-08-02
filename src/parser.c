@@ -263,6 +263,21 @@ static ASTNode *parse_expression(Parser *parser, int precedence)
 
 static ASTNode *parse_literal(Parser *parser, Token token)
 {
+  switch (token.type)
+  {
+  case TOKEN_TRUE:
+  {
+    ASTNode *node = make_node(AST_BOOL_LITERAL, token);
+    node->bool_literal.value = true;
+    return node;
+  }
+  case TOKEN_FALSE:
+  {
+    ASTNode *node = make_node(AST_BOOL_LITERAL, token);
+    node->bool_literal.value = false;
+    return node;
+  }
+  }
   ASTNode *node = malloc(sizeof(ASTNode));
   node->type = AST_LITERAL;
   node->literal.token = token;
@@ -761,6 +776,8 @@ static void init_parse_rules()
   parse_rules[TOKEN_IDENTIFIER].nud = parse_variable;
   parse_rules[TOKEN_FN].nud = parse_lambda_expression;
   parse_rules[TOKEN_STRING].nud = parse_literal;
+  parse_rules[TOKEN_TRUE].nud = parse_literal;
+  parse_rules[TOKEN_FALSE].nud = parse_literal;
   parse_rules[TOKEN_LBRACKET].nud = parse_list_literal;
   parse_rules[TOKEN_LBRACE].nud = parse_struct_literal;
 

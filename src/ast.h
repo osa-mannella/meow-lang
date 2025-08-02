@@ -2,6 +2,7 @@
 #define AST_H
 
 #include "lexer.h"
+#include <stdbool.h>
 
 typedef enum
 {
@@ -25,6 +26,7 @@ typedef enum
   AST_LIST_LITERAL,
   AST_STRUCT_LITERAL,
   AST_STRUCT_UPDATE,
+  AST_BOOL_LITERAL,
 } ASTNodeType;
 
 typedef struct ASTNode ASTNode;
@@ -143,6 +145,10 @@ struct ASTNode
       ASTNode **values;
       int count;
     } struct_update;
+    struct
+    {
+      bool value;
+    } bool_literal;
   };
 };
 
