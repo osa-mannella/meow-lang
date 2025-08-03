@@ -1,1 +1,7 @@
-obj <- { x = 5 }
+enum Shape {
+Rectangle { length, width },
+Square { side },
+Circle { radius },
+}
+
+let s = Shape::Circle { radius = 4 }

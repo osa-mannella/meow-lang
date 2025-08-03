@@ -13,6 +13,7 @@ static ASTNode *parse_let_statement(Parser *parser);
 static ASTNode *parse_function_statement(Parser *parser);
 static ASTNode *parse_match_statement(Parser *parser);
 static ASTNode *parse_expression_statement(Parser *parser);
+static ASTNode *parse_enum_statement(Parser *parser);
 
 // ADD THESE
 static void parser_advance(Parser *parser);
@@ -78,6 +79,201 @@ static ASTNode *parse_struct_literal(Parser *parser, Token lbrace)
 error:
   free(keys);
   free(values);
+  return NULL;
+}
+
+static ASTNode *parse_enum_constructor(Parser *parser, Token enum_name)
+{
+  // Expect "::"
+  parser_consume(parser, TOKEN_DOUBLE_COLON, "Expected '::' after enum name.");
+  if (parser->current.type != TOKEN_IDENTIFIER)
+  {
+    printf("Parse error: Expected enum variant name.\n");
+    parser->had_error = 1;
+    return NULL;
+  }
+  Token variant_name = parser->current;
+  parser_advance(parser);
+
+  // Check for fields
+  Token *field_names = NULL;
+  ASTNode **values = NULL;
+  int field_count = 0, field_capacity = 0;
+
+  if (parser->current.type == TOKEN_LBRACE)
+  {
+    parser_advance(parser);
+    while (parser->current.type != TOKEN_RBRACE &&
+           parser->current.type != TOKEN_EOF)
+    {
+      if (parser->current.type != TOKEN_IDENTIFIER)
+      {
+        printf("Parse error: Expected field name in enum constructor.\n");
+        parser->had_error = 1;
+        goto error;
+      }
+      Token field_name = parser->current;
+      parser_advance(parser);
+
+      parser_consume(parser, TOKEN_EQUAL, "Expected '=' after field name.");
+      ASTNode *value = parse_expression(parser, 0);
+      if (!value)
+        goto error;
+
+      if (field_count >= field_capacity)
+      {
+        field_capacity = field_capacity == 0 ? 4 : field_capacity * 2;
+        field_names = realloc(field_names, sizeof(Token) * field_capacity);
+        values = realloc(values, sizeof(ASTNode *) * field_capacity);
+      }
+      field_names[field_count] = field_name;
+      values[field_count] = value;
+      field_count++;
+
+      if (parser->current.type == TOKEN_COMMA)
+        parser_advance(parser);
+      else if (parser->current.type != TOKEN_RBRACE)
+      {
+        printf("Parse error: Expected ',' or '}' in enum constructor.\n");
+        parser->had_error = 1;
+        goto error;
+      }
+    }
+    parser_consume(parser, TOKEN_RBRACE, "Expected '}' after enum constructor fields.");
+  }
+
+  ASTNode *node = malloc(sizeof(ASTNode));
+  node->type = AST_ENUM_CONSTRUCTOR;
+  node->enum_constructor.enum_name = enum_name;
+  node->enum_constructor.variant_name = variant_name;
+  node->enum_constructor.field_names = field_names;
+  node->enum_constructor.values = values;
+  node->enum_constructor.field_count = field_count;
+  return node;
+
+error:
+  free(field_names);
+  free(values);
+  return NULL;
+}
+
+static ASTNode *parse_enum_statement(Parser *parser)
+{
+  parser_advance(parser); // consume 'enum'
+
+  // Expect enum name
+  if (parser->current.type != TOKEN_IDENTIFIER)
+  {
+    printf("Parse error: Expected enum name.\n");
+    parser->had_error = 1;
+    return NULL;
+  }
+  Token name = parser->current;
+  parser_advance(parser);
+
+  if (parser->current.type != TOKEN_LBRACE)
+  {
+    printf("Parse error: Expected '{' after enum name.\n");
+    parser->had_error = 1;
+    return NULL;
+  }
+  parser_advance(parser); // consume '{'
+
+  // Variant storage
+  Token *variant_names = NULL;
+  Token **field_names = NULL;
+  int *field_counts = NULL;
+  int variant_count = 0, variant_capacity = 0;
+
+  // Loop through variants
+  while (parser->current.type != TOKEN_RBRACE &&
+         parser->current.type != TOKEN_EOF)
+  {
+    if (parser->current.type != TOKEN_IDENTIFIER)
+    {
+      printf("Parse error: Expected variant name.\n");
+      parser->had_error = 1;
+      goto error;
+    }
+
+    Token variant_name = parser->current;
+    parser_advance(parser);
+
+    // Parse fields if present
+    Token *fields = NULL;
+    int field_count = 0, field_capacity = 0;
+    if (parser->current.type == TOKEN_LBRACE)
+    {
+      parser_advance(parser); // consume '{'
+      while (parser->current.type != TOKEN_RBRACE &&
+             parser->current.type != TOKEN_EOF)
+      {
+        if (parser->current.type != TOKEN_IDENTIFIER)
+        {
+          printf("Parse error: Expected field name.\n");
+          parser->had_error = 1;
+          goto error;
+        }
+        if (field_count >= field_capacity)
+        {
+          field_capacity = field_capacity == 0 ? 4 : field_capacity * 2;
+          fields = realloc(fields, sizeof(Token) * field_capacity);
+        }
+        fields[field_count++] = parser->current;
+        parser_advance(parser);
+
+        if (parser->current.type == TOKEN_COMMA)
+          parser_advance(parser);
+        else if (parser->current.type != TOKEN_RBRACE)
+        {
+          printf("Parse error: Expected ',' or '}' in variant fields.\n");
+          parser->had_error = 1;
+          goto error;
+        }
+      }
+      parser_consume(parser, TOKEN_RBRACE, "Expected '}' after fields.");
+    }
+
+    // store variant
+    if (variant_count >= variant_capacity)
+    {
+      variant_capacity = variant_capacity == 0 ? 4 : variant_capacity * 2;
+      variant_names = realloc(variant_names, sizeof(Token) * variant_capacity);
+      field_names = realloc(field_names, sizeof(Token *) * variant_capacity);
+      field_counts = realloc(field_counts, sizeof(int) * variant_capacity);
+    }
+    variant_names[variant_count] = variant_name;
+    field_names[variant_count] = fields;
+    field_counts[variant_count] = field_count;
+    variant_count++;
+
+    if (parser->current.type == TOKEN_COMMA)
+      parser_advance(parser);
+    else if (parser->current.type != TOKEN_RBRACE)
+    {
+      printf("Parse error: Expected ',' or '}' after variant.\n");
+      parser->had_error = 1;
+      goto error;
+    }
+  }
+
+  parser_consume(parser, TOKEN_RBRACE, "Expected '}' after enum body.");
+
+  // Build AST node
+  ASTNode *node = malloc(sizeof(ASTNode));
+  node->type = AST_ENUM_STATEMENT;
+  node->enum_statement.name = name;
+  node->enum_statement.variant_names = variant_names;
+  node->enum_statement.field_names = field_names;
+  node->enum_statement.field_counts = field_counts;
+  node->enum_statement.variant_count = variant_count;
+
+  return node;
+
+error:
+  free(variant_names);
+  free(field_names);
+  free(field_counts);
   return NULL;
 }
 
@@ -302,6 +498,10 @@ static ASTNode *parse_statement(Parser *parser)
   {
     return parse_match_statement(parser);
   }
+  if (parser->current.type == TOKEN_ENUM)
+  {
+    return parse_enum_statement(parser);
+  }
   return parse_expression_statement(parser);
 }
 
@@ -477,6 +677,10 @@ static ASTNode *parse_grouping(Parser *parser, Token token)
 
 static ASTNode *parse_variable(Parser *parser, Token token)
 {
+  if (parser->current.type == TOKEN_DOUBLE_COLON)
+  {
+    return parse_enum_constructor(parser, token);
+  }
   ASTNode *node = malloc(sizeof(ASTNode));
   node->type = AST_VARIABLE;
   node->variable.name = token;

@@ -27,6 +27,10 @@ typedef enum
   AST_STRUCT_LITERAL,
   AST_STRUCT_UPDATE,
   AST_BOOL_LITERAL,
+  AST_ENUM_STATEMENT,
+  AST_ENUM_CONSTRUCTOR,
+  AST_DESTRUCTURE_PATTERN,
+
 } ASTNodeType;
 
 typedef struct ASTNode ASTNode;
@@ -149,6 +153,27 @@ struct ASTNode
     {
       bool value;
     } bool_literal;
+    struct
+    {
+      Token name;           // enum name
+      Token *variant_names; // variant names
+      Token **field_names;  // each variant's fields (array of arrays)
+      int *field_counts;    // number of fields per variant
+      int variant_count;
+    } enum_statement;
+    struct
+    {
+      Token enum_name;
+      Token variant_name;
+      Token *field_names; // ["radius"]
+      ASTNode **values;   // [Literal(4)]
+      int field_count;
+    } enum_constructor;
+    struct
+    {
+      Token *bindings; // array of field bindings
+      int binding_count;
+    } destructure_pattern;
   };
 };
 

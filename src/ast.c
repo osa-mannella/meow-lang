@@ -73,6 +73,18 @@ void free_node(ASTNode *node)
         }
         free(node->match_statement.arms);
         break;
+    case AST_ENUM_STATEMENT:
+        free(node->enum_statement.variant_names);
+        if (node->enum_statement.field_names)
+        {
+            for (int i = 0; i < node->enum_statement.variant_count; i++)
+            {
+                free(node->enum_statement.field_names[i]); // free each field array
+            }
+            free(node->enum_statement.field_names);
+        }
+        free(node->enum_statement.field_counts);
+        break;
 
     case AST_ERROR:
         // nothing extra
@@ -287,7 +299,7 @@ void parser_print_ast_node(ASTNode *node)
 
     case AST_STRUCT_UPDATE:
         parser_print_ast_node(node->struct_update.base);
-        printf(" { ");
+        printf(" <- { ");
         for (int i = 0; i < node->struct_update.count; i++)
         {
             print_token(&node->struct_update.keys[i]);
@@ -297,6 +309,38 @@ void parser_print_ast_node(ASTNode *node)
                 printf(", ");
         }
         printf(" }");
+        break;
+    case AST_ENUM_STATEMENT:
+        printf("enum ");
+        print_token(&node->enum_statement.name);
+        printf(" {\n");
+        for (int i = 0; i < node->enum_statement.variant_count; i++)
+        {
+            printf("  ");
+            print_token(&node->enum_statement.variant_names[i]);
+            if (node->enum_statement.field_counts[i] > 0)
+            {
+                printf(" { ");
+                for (int j = 0; j < node->enum_statement.field_counts[i]; j++)
+                {
+                    print_token(&node->enum_statement.field_names[i][j]);
+                    if (j < node->enum_statement.field_counts[i] - 1)
+                        printf(", ");
+                }
+                printf(" }");
+            }
+            if (i < node->enum_statement.variant_count - 1)
+                printf(",");
+            printf("\n");
+        }
+        printf("}");
+        break;
+
+    case AST_BOOL_LITERAL:
+        printf(node->bool_literal.value ? "true" : "false");
+        break;
+    default:
+        printf("<?>");
         break;
     }
 }

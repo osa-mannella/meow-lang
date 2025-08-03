@@ -113,7 +113,7 @@ match x {
 ```mirrow
 let person = { name = "Alice", age = 25 }
 match person {
-    {name, age} -> print("Name: " + name + ", Age: " + age)
+    [name, age] -> print("Name: " + name + ", Age: " + age)
     _ -> print("No match")
 }
 ```
@@ -298,4 +298,24 @@ func middleName(user) -> Maybe<String> {
 ```mirrow
 let f = async fetchData()
 await f
+```
+
+## Enums
+
+- Supports native ADTs within enums
+- Constructed using double colon operator
+- Can be destructed within match statements similar to structs
+
+```mirrow
+enum Shape {
+    Rectangle { length, width },
+    Square { side },
+    Circle { radius },
+}
+
+let circle = Shape::Circle { radius = 4 }
+
+match circle {
+    Shape::Circle [r] -> PI*r^2
+}
 ```

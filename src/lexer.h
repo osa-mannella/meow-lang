@@ -54,6 +54,8 @@ typedef enum
   TOKEN_IMPORT,
   TOKEN_PIPELINE,
   TOKEN_LARROW,
+  TOKEN_ENUM,
+  TOKEN_DOUBLE_COLON
 } TokenType;
 
 typedef struct

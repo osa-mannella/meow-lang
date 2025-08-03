@@ -138,6 +138,8 @@ static Token identifier(Lexer *lexer)
     return make_token(TOKEN_AWAIT, lexer);
   if (length == 6 && strncmp(lexer->start, "import", 6) == 0)
     return make_token(TOKEN_IMPORT, lexer);
+  if (length == 4 && strncmp(lexer->start, "enum", 4) == 0)
+    return make_token(TOKEN_ENUM, lexer);
 
   return make_token(TOKEN_IDENTIFIER, lexer);
 }
@@ -274,6 +276,8 @@ Token lexer_next(Lexer *lexer)
   case ';':
     return make_token(TOKEN_SEMICOLON, lexer);
   case ':':
+    if (match(':', lexer))
+      return make_token(TOKEN_DOUBLE_COLON, lexer);
     return make_token(TOKEN_COLON, lexer);
   case '.':
     return make_token(TOKEN_DOT, lexer);
