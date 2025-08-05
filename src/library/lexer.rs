@@ -85,11 +85,9 @@ impl Token {
 }
 
 pub struct Lexer<'a> {
-    source: &'a str,
     chars: std::str::Chars<'a>,
     current: Option<char>,
     line: usize,
-    peeked: Option<char>,
 }
 
 impl<'a> Lexer<'a> {
@@ -97,11 +95,9 @@ impl<'a> Lexer<'a> {
         let mut chars = source.chars();
         let current = chars.next();
         Self {
-            source,
             chars,
             current,
             line: 1,
-            peeked: None,
         }
     }
 
@@ -151,7 +147,12 @@ impl<'a> Lexer<'a> {
         let (kind, value) = match text.as_str() {
             "let" => (TokenKind::Let, TokenValue::None),
             "func" => (TokenKind::Func, TokenValue::None),
-            // ... other keywords ...
+            "if" => (TokenKind::If, TokenValue::None),
+            "match" => (TokenKind::Match, TokenValue::None),
+            "async" => (TokenKind::Async, TokenValue::None),
+            "await" => (TokenKind::Await, TokenValue::None),
+            "import" => (TokenKind::Import, TokenValue::None),
+            "enum" => (TokenKind::Enum, TokenValue::None),
             _ => (TokenKind::Identifier, TokenValue::Identifier(text)),
         };
 

@@ -18,7 +18,6 @@ pub struct Parser<'a> {
     current: Token,
     previous: Token,
     had_error: bool,
-    panic_mode: bool,
     rules: HashMap<TokenKind, ParseRule<'a>>,
 }
 
@@ -30,7 +29,6 @@ impl<'a> Parser<'a> {
             current: first.clone(),
             previous: first,
             had_error: false,
-            panic_mode: false,
             rules: HashMap::new(),
         };
         parser.init_parse_rules();
@@ -58,6 +56,7 @@ impl<'a> Parser<'a> {
 
     fn parse_expression(&mut self, min_precedence: u8) -> ParseResult {
         self.advance();
+
         let nud = self
             .rules
             .get(&self.previous.kind)
@@ -146,7 +145,6 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_match_statement(&mut self) -> ParseResult {
-        self.advance(); // consume 'match'
         let value = self.parse_expression(0)?;
 
         if self.current.kind != TokenKind::LBrace {
@@ -238,7 +236,6 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_function_statement(&mut self) -> ParseResult {
-        self.advance(); // consume 'func'
         let name = self.current.clone();
         if name.kind != TokenKind::Identifier {
             self.error("Expected function name after 'func'.");
@@ -497,8 +494,6 @@ impl<'a> Parser<'a> {
 
     fn parse_if_expression(&mut self, _token: Token) -> ParseResult {
         let condition = self.parse_expression(0)?;
-
-        self.consume(TokenKind::LBrace, "Expected '{' after 'if' condition.");
         let then_branch = self.parse_block()?; // Vec<ASTNode>
 
         let else_branch = if self.current.kind == TokenKind::Else {

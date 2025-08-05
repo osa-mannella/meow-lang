@@ -1,1 +1,1 @@
-IO.print("hi")
+let x = { meow = true }

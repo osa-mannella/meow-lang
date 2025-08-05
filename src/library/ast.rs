@@ -85,7 +85,7 @@ pub enum ASTNode {
     EnumStatement {
         name: Token,
         variant_names: Vec<Token>,
-        field_names: Vec<Vec<Token>>, // each variant's field list
+        field_names: Vec<Vec<Token>>,
         field_counts: Vec<usize>,
     },
     EnumConstructor {
