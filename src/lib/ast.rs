@@ -1,0 +1,350 @@
+use super::lexer::Token; // assuming Token is defined in your lexer module
+
+#[derive(Debug, Clone)]
+pub enum ASTNode {
+    Literal {
+        token: Token,
+    },
+    Binary {
+        left: Box<ASTNode>,
+        op: Token,
+        right: Box<ASTNode>,
+    },
+    Unary {
+        op: Token,
+        right: Box<ASTNode>,
+    },
+    Variable {
+        name: Token,
+    },
+    Grouping {
+        expression: Box<ASTNode>,
+    },
+    Assignment {
+        name: Token,
+        value: Box<ASTNode>,
+    },
+    Call {
+        callee: Box<ASTNode>,
+        arguments: Vec<ASTNode>,
+    },
+    PropertyAccess {
+        object: Box<ASTNode>,
+        property: Token,
+    },
+    Error {
+        message: String,
+    },
+    LetStatement {
+        name: Token,
+        initializer: Box<ASTNode>,
+    },
+    LetBangStatement {
+        name: Token,
+        initializer: Box<ASTNode>,
+    },
+    ExpressionStatement {
+        expression: Box<ASTNode>,
+    },
+    IfExpression {
+        condition: Box<ASTNode>,
+        then_branch: Vec<ASTNode>,
+        else_branch: Option<Vec<ASTNode>>,
+    },
+    FunctionStatement {
+        name: Token,
+        params: Vec<Token>,
+        body: Vec<ASTNode>,
+    },
+    LambdaExpression {
+        params: Vec<Token>,
+        body: Vec<ASTNode>,
+    },
+    MatchStatement {
+        value: Box<ASTNode>,
+        arms: Vec<MatchArm>,
+    },
+    Pipeline {
+        left: Box<ASTNode>,
+        right: Box<ASTNode>,
+    },
+    ImportStatement {
+        path: Token,
+    },
+    ListLiteral {
+        elements: Vec<ASTNode>,
+    },
+    StructLiteral {
+        keys: Vec<Token>,
+        values: Vec<ASTNode>,
+    },
+    StructUpdate {
+        base: Box<ASTNode>,
+        keys: Vec<Token>,
+        values: Vec<ASTNode>,
+    },
+    BoolLiteral {
+        value: bool,
+    },
+    EnumStatement {
+        name: Token,
+        variant_names: Vec<Token>,
+        field_names: Vec<Vec<Token>>, // each variant's field list
+        field_counts: Vec<usize>,
+    },
+    EnumConstructor {
+        enum_name: Token,
+        variant_name: Token,
+        field_names: Vec<Token>,
+        values: Vec<ASTNode>,
+    },
+    DestructurePattern {
+        bindings: Vec<Token>,
+    },
+}
+
+#[derive(Debug, Clone)]
+pub struct MatchArm {
+    pub pattern: Box<ASTNode>,
+    pub expression: Box<ASTNode>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ASTProgram {
+    pub nodes: Vec<ASTNode>,
+}
+
+impl ASTProgram {
+    pub fn print(&self) {
+        for node in &self.nodes {
+            node.print();
+            println!();
+        }
+    }
+}
+
+impl ASTNode {
+    pub fn print(&self) {
+        use ASTNode::*;
+        match self {
+            Literal { token } => print!("{:?}", token), // customize as needed
+            Unary { op, right } => {
+                print!("{:?}(", op);
+                right.print();
+                print!(")");
+            }
+            Binary { left, op, right } => {
+                print!("(");
+                left.print();
+                print!(" {:?} ", op);
+                right.print();
+                print!(")");
+            }
+            Variable { name } => print!("{:?}", name),
+            Grouping { expression } => {
+                print!("(");
+                expression.print();
+                print!(")");
+            }
+            Assignment { name, value } => {
+                print!("{:?} = ", name);
+                value.print();
+            }
+            Call { callee, arguments } => {
+                callee.print();
+                print!("(");
+                for (i, arg) in arguments.iter().enumerate() {
+                    arg.print();
+                    if i < arguments.len() - 1 {
+                        print!(", ");
+                    }
+                }
+                print!(")");
+            }
+            PropertyAccess { object, property } => {
+                object.print();
+                print!(".");
+                print!("{:?}", property);
+            }
+            Error { message } => print!("<error: {}>", message),
+            LetStatement { name, initializer } => {
+                print!("let {:?} = ", name.value);
+                initializer.print();
+            }
+            LetBangStatement { name, initializer } => {
+                print!("let! {:?} = ", name.value);
+                initializer.print();
+            }
+            ExpressionStatement { expression } => expression.print(),
+            FunctionStatement { name, params, body } => {
+                print!("func {:?}(", name);
+                for (i, param) in params.iter().enumerate() {
+                    print!("{:?}", param);
+                    if i < params.len() - 1 {
+                        print!(", ");
+                    }
+                }
+                print!(") {{ ");
+                for (i, stmt) in body.iter().enumerate() {
+                    stmt.print();
+                    if i < body.len() - 1 {
+                        print!("; ");
+                    }
+                }
+                print!(" }}");
+            }
+            LambdaExpression { params, body } => {
+                print!("fn(");
+                for (i, param) in params.iter().enumerate() {
+                    print!("{:?}", param);
+                    if i < params.len() - 1 {
+                        print!(", ");
+                    }
+                }
+                print!(") -> {{ ");
+                for (i, stmt) in body.iter().enumerate() {
+                    stmt.print();
+                    if i < body.len() - 1 {
+                        print!("; ");
+                    }
+                }
+                print!(" }}");
+            }
+            MatchStatement { value, arms } => {
+                print!("match ");
+                value.print();
+                println!(" {{");
+                for arm in arms {
+                    print!("  ");
+                    arm.pattern.print();
+                    print!(" -> ");
+                    arm.expression.print();
+                    println!(",");
+                }
+                print!("}}");
+            }
+            Pipeline { left, right } => {
+                print!("(");
+                left.print();
+                print!(" |> ");
+                right.print();
+                print!(")");
+            }
+            ImportStatement { path } => {
+                print!("import {:?}", path);
+            }
+            IfExpression {
+                condition,
+                then_branch,
+                else_branch,
+            } => {
+                print!("if ");
+                condition.print();
+                print!(" {{ ");
+                for (i, stmt) in then_branch.iter().enumerate() {
+                    stmt.print();
+                    if i < then_branch.len() - 1 {
+                        print!("; ");
+                    }
+                }
+                print!(" }}");
+                if let Some(else_branch) = else_branch {
+                    print!(" else {{ ");
+                    for (i, stmt) in else_branch.iter().enumerate() {
+                        stmt.print();
+                        if i < else_branch.len() - 1 {
+                            print!("; ");
+                        }
+                    }
+                    print!(" }}");
+                }
+            }
+            ListLiteral { elements } => {
+                print!("[");
+                for (i, el) in elements.iter().enumerate() {
+                    el.print();
+                    if i < elements.len() - 1 {
+                        print!(", ");
+                    }
+                }
+                print!("]");
+            }
+            StructLiteral { keys, values } => {
+                print!("{{ ");
+                for (i, (k, v)) in keys.iter().zip(values).enumerate() {
+                    print!("{:?} = ", k);
+                    v.print();
+                    if i < keys.len() - 1 {
+                        print!(", ");
+                    }
+                }
+                print!(" }}");
+            }
+            StructUpdate { base, keys, values } => {
+                base.print();
+                print!(" <- {{ ");
+                for (i, (k, v)) in keys.iter().zip(values).enumerate() {
+                    print!("{:?} = ", k);
+                    v.print();
+                    if i < keys.len() - 1 {
+                        print!(", ");
+                    }
+                }
+                print!(" }}");
+            }
+            EnumStatement {
+                name,
+                variant_names,
+                field_names,
+                field_counts,
+            } => {
+                print!("enum {:?} {{\n", name);
+                for (i, (variant, fields)) in variant_names.iter().zip(field_names).enumerate() {
+                    print!("  {:?}", variant);
+                    if !fields.is_empty() {
+                        print!(" {{ ");
+                        for (j, field) in fields.iter().enumerate() {
+                            print!("{:?}", field);
+                            if j < fields.len() - 1 {
+                                print!(", ");
+                            }
+                        }
+                        print!(" }}");
+                    }
+                    if i < variant_names.len() - 1 {
+                        print!(",");
+                    }
+                    println!();
+                }
+                print!("}}");
+            }
+            EnumConstructor {
+                enum_name,
+                variant_name,
+                field_names,
+                values,
+            } => {
+                print!("{:?}::{:?}(", enum_name, variant_name);
+                for (i, (name, value)) in field_names.iter().zip(values).enumerate() {
+                    print!("{:?} = ", name);
+                    value.print();
+                    if i < field_names.len() - 1 {
+                        print!(", ");
+                    }
+                }
+                print!(")");
+            }
+            BoolLiteral { value } => print!("{}", value),
+            DestructurePattern { bindings } => {
+                print!("(");
+                for (i, b) in bindings.iter().enumerate() {
+                    print!("{:?}", b);
+                    if i < bindings.len() - 1 {
+                        print!(", ");
+                    }
+                }
+                print!(")");
+            }
+        }
+    }
+}
