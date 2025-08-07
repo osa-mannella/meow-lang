@@ -1,13 +1,11 @@
 use crate::library::compiler::{BytecodeProgram, ConstantValue};
 
-/// Helper function to get constant string value by index
 fn get_constant_string(bytecode: &BytecodeProgram, index: u16) -> String {
     if let Some(constant) = bytecode.constants.get(index as usize) {
         match &constant.value {
             ConstantValue::String(s) => s.clone(),
             ConstantValue::Number(n) => n.to_string(),
             ConstantValue::Boolean(b) => b.to_string(),
-            ConstantValue::Null => "null".to_string(),
         }
     } else {
         format!("INVALID_CONST_{}", index)
@@ -16,7 +14,7 @@ fn get_constant_string(bytecode: &BytecodeProgram, index: u16) -> String {
 
 pub fn print_bytecode_debug(bytecode: &BytecodeProgram) {
     println!("=== MIRROW BYTECODE DEBUG OUTPUT ===");
-    
+
     // Header
     println!("\n--- HEADER ---");
     println!(
@@ -34,7 +32,6 @@ pub fn print_bytecode_debug(bytecode: &BytecodeProgram) {
             ConstantValue::String(s) => println!("{}: String(\"{}\")", i, s),
             ConstantValue::Number(n) => println!("{}: Number({})", i, n),
             ConstantValue::Boolean(b) => println!("{}: Boolean({})", i, b),
-            ConstantValue::Null => println!("{}: Null", i),
         }
     }
 
@@ -76,29 +73,35 @@ pub fn print_bytecode_debug(bytecode: &BytecodeProgram) {
     }
 
     // Instructions
-    println!("\n--- INSTRUCTIONS ({} bytes) ---", bytecode.instructions.len());
+    println!(
+        "\n--- INSTRUCTIONS ({} bytes) ---",
+        bytecode.instructions.len()
+    );
     if bytecode.instructions.is_empty() {
         println!("(No instructions generated)");
     } else {
         let mut i = 0;
         while i < bytecode.instructions.len() {
             print!("{:04}: ", i);
-            
+
             let opcode = bytecode.instructions[i];
-            let opcode_name = bytecode.opcode_map.iter()
+            let opcode_name = bytecode
+                .opcode_map
+                .iter()
                 .find(|&(_, op)| *op == opcode)
                 .map(|(name, _)| name.as_str())
                 .unwrap_or("UNKNOWN");
-            
+
             print!("{:#04X} {} ", opcode, opcode_name);
-            
+
             // Try to decode operands based on known instruction formats
             match opcode_name {
-                "load_const" | "load_global" | "store_global" | "jump" | "jump_if_false" => {
+                "load_const" | "load_global" | "store_global" | "jump" | "jump_if_false"
+                | "jump_if_true" => {
                     if i + 2 < bytecode.instructions.len() {
                         let operand = u16::from_le_bytes([
-                            bytecode.instructions[i + 1], 
-                            bytecode.instructions[i + 2]
+                            bytecode.instructions[i + 1],
+                            bytecode.instructions[i + 2],
                         ]);
                         println!("{}", operand);
                         i += 3;
@@ -110,8 +113,8 @@ pub fn print_bytecode_debug(bytecode: &BytecodeProgram) {
                 "store_var" | "load_var" => {
                     if i + 2 < bytecode.instructions.len() {
                         let var_index = u16::from_le_bytes([
-                            bytecode.instructions[i + 1], 
-                            bytecode.instructions[i + 2]
+                            bytecode.instructions[i + 1],
+                            bytecode.instructions[i + 2],
                         ]);
                         println!("var_index={}", var_index);
                         i += 3;
@@ -131,7 +134,11 @@ pub fn print_bytecode_debug(bytecode: &BytecodeProgram) {
                 }
                 "call" | "call_global" => {
                     if i + 2 < bytecode.instructions.len() {
-                        println!("func={}, argc={}", bytecode.instructions[i + 1], bytecode.instructions[i + 2]);
+                        println!(
+                            "func={}, argc={}",
+                            bytecode.instructions[i + 1],
+                            bytecode.instructions[i + 2]
+                        );
                         i += 3;
                     } else {
                         println!("(incomplete operands)");
@@ -140,7 +147,11 @@ pub fn print_bytecode_debug(bytecode: &BytecodeProgram) {
                 }
                 "call_native" => {
                     if i + 2 < bytecode.instructions.len() {
-                        println!("native_id={}, argc={}", bytecode.instructions[i + 1], bytecode.instructions[i + 2]);
+                        println!(
+                            "native_id={}, argc={}",
+                            bytecode.instructions[i + 1],
+                            bytecode.instructions[i + 2]
+                        );
                         i += 3;
                     } else {
                         println!("(incomplete operands)");
@@ -152,15 +163,21 @@ pub fn print_bytecode_debug(bytecode: &BytecodeProgram) {
                         let enum_index = bytecode.instructions[i + 1];
                         let variant_index = bytecode.instructions[i + 2];
                         let field_count = bytecode.instructions[i + 3];
-                        
+
                         // Try to resolve enum and variant names for better readability
-                        let mut debug_info = format!("enum={}, variant={}, fields={}", enum_index, variant_index, field_count);
+                        let mut debug_info = format!(
+                            "enum={}, variant={}, fields={}",
+                            enum_index, variant_index, field_count
+                        );
                         if let Some(enum_def) = bytecode.enums.get(enum_index as usize) {
                             let enum_name = get_constant_string(bytecode, enum_def.name_index);
                             if let Some(variant) = enum_def.variants.get(variant_index as usize) {
-                                let variant_name = get_constant_string(bytecode, variant.name_index);
-                                debug_info = format!("{}::{} (enum={}, variant={}, fields={})", 
-                                    enum_name, variant_name, enum_index, variant_index, field_count);
+                                let variant_name =
+                                    get_constant_string(bytecode, variant.name_index);
+                                debug_info = format!(
+                                    "{}::{} (enum={}, variant={}, fields={})",
+                                    enum_name, variant_name, enum_index, variant_index, field_count
+                                );
                             }
                         }
                         println!("{}", debug_info);
@@ -179,8 +196,57 @@ pub fn print_bytecode_debug(bytecode: &BytecodeProgram) {
                         i += 1;
                     }
                 }
-                "add" | "sub" | "mul" | "div" | "equal" | "less" | "greater" | 
-                "pop" | "dup" | "return" | "halt" => {
+                "match_literal" => {
+                    if i + 2 < bytecode.instructions.len() {
+                        let const_index = u16::from_le_bytes([
+                            bytecode.instructions[i + 1],
+                            bytecode.instructions[i + 2],
+                        ]);
+                        let const_value = get_constant_string(bytecode, const_index);
+                        println!("const_index={} (value={})", const_index, const_value);
+                        i += 3;
+                    } else {
+                        println!("(incomplete operand)");
+                        i += 1;
+                    }
+                }
+                "match_enum_variant" => {
+                    if i + 2 < bytecode.instructions.len() {
+                        let enum_index = bytecode.instructions[i + 1];
+                        let variant_index = bytecode.instructions[i + 2];
+
+                        // Try to resolve enum and variant names for better readability
+                        let mut debug_info =
+                            format!("enum={}, variant={}", enum_index, variant_index);
+                        if let Some(enum_def) = bytecode.enums.get(enum_index as usize) {
+                            let enum_name = get_constant_string(bytecode, enum_def.name_index);
+                            if let Some(variant) = enum_def.variants.get(variant_index as usize) {
+                                let variant_name =
+                                    get_constant_string(bytecode, variant.name_index);
+                                debug_info = format!(
+                                    "{}::{} (enum={}, variant={})",
+                                    enum_name, variant_name, enum_index, variant_index
+                                );
+                            }
+                        }
+                        println!("{}", debug_info);
+                        i += 3;
+                    } else {
+                        println!("(incomplete operands)");
+                        i += 1;
+                    }
+                }
+                "extract_enum_field" => {
+                    if i + 1 < bytecode.instructions.len() {
+                        println!("field_index={}", bytecode.instructions[i + 1]);
+                        i += 2;
+                    } else {
+                        println!("(incomplete operand)");
+                        i += 1;
+                    }
+                }
+                "add" | "sub" | "mul" | "div" | "equal" | "less" | "greater" | "pop" | "dup"
+                | "return" | "halt" | "match_fail" => {
                     println!(""); // No operands
                     i += 1;
                 }
@@ -191,6 +257,6 @@ pub fn print_bytecode_debug(bytecode: &BytecodeProgram) {
             }
         }
     }
-    
+
     println!("\n=== END BYTECODE DEBUG ===");
 }

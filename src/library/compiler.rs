@@ -19,7 +19,6 @@ pub enum ConstantValue {
     String(String),
     Number(f64),
     Boolean(bool),
-    Null,
 }
 
 #[derive(Debug, Clone)]
@@ -62,8 +61,8 @@ struct CompileContext {
     enum_map: HashMap<String, u16>,
     loaded_modules: HashMap<String, LoadedModule>,
     module_registry: ModuleRegistry,
-    variable_map: HashMap<String, u16>, // Maps variable names to indices
-    variable_counter: u16,              // Counter for assigning variable indices
+    variable_map: HashMap<String, u16>,
+    variable_counter: u16,
 }
 
 impl BytecodeProgram {
@@ -86,6 +85,7 @@ impl BytecodeProgram {
 
         opcode_map.insert("jump".to_string(), 0x20);
         opcode_map.insert("jump_if_false".to_string(), 0x21);
+        opcode_map.insert("jump_if_true".to_string(), 0x22);
 
         opcode_map.insert("call".to_string(), 0x30);
         opcode_map.insert("call_global".to_string(), 0x31);
@@ -95,13 +95,17 @@ impl BytecodeProgram {
         opcode_map.insert("pop".to_string(), 0x40);
         opcode_map.insert("dup".to_string(), 0x41);
 
-        // Variable operations
         opcode_map.insert("store_var".to_string(), 0x50);
         opcode_map.insert("load_var".to_string(), 0x51);
 
-        // Enum operations
         opcode_map.insert("create_enum".to_string(), 0x52);
         opcode_map.insert("get_enum_variant".to_string(), 0x53);
+
+        opcode_map.insert("match_literal".to_string(), 0x54);
+        opcode_map.insert("match_literal".to_string(), 0x54);
+        opcode_map.insert("match_enum_variant".to_string(), 0x55);
+        opcode_map.insert("extract_enum_field".to_string(), 0x56);
+        opcode_map.insert("match_fail".to_string(), 0x57);
 
         opcode_map.insert("halt".to_string(), 0xFF);
 
@@ -385,8 +389,7 @@ fn collect_constants(bytecode: &mut BytecodeProgram, context: &CompileContext, n
         ASTNode::Call { callee, .. } => {
             if let ASTNode::Variable { name } = callee.as_ref() {
                 if let Ok(func_name) = get_identifier_string(&name.value) {
-                    if let Some(&_func_index) = context.function_map.get(&func_name) {
-                    }
+                    if let Some(&_func_index) = context.function_map.get(&func_name) {}
                 }
             }
         }
@@ -570,24 +573,22 @@ fn generate_instructions(
             }
 
             match callee.as_ref() {
-                ASTNode::Variable { name } => {
-                    match get_identifier_string(&name.value) {
-                        Ok(func_name) => {
-                            if let Some(&func_index) = context.function_map.get(&func_name) {
-                                if let Some(call_opcode) = bytecode.get_opcode("call") {
-                                    bytecode.emit_instruction_u8_u8(
-                                        call_opcode,
-                                        func_index as u8,
-                                        arguments.len() as u8,
-                                    );
-                                }
+                ASTNode::Variable { name } => match get_identifier_string(&name.value) {
+                    Ok(func_name) => {
+                        if let Some(&func_index) = context.function_map.get(&func_name) {
+                            if let Some(call_opcode) = bytecode.get_opcode("call") {
+                                bytecode.emit_instruction_u8_u8(
+                                    call_opcode,
+                                    func_index as u8,
+                                    arguments.len() as u8,
+                                );
                             }
                         }
-                        Err(err) => {
-                            eprintln!("Compile error: {}", err);
-                        }
                     }
-                }
+                    Err(err) => {
+                        eprintln!("Compile error: {}", err);
+                    }
+                },
 
                 ASTNode::PropertyAccess { object, property } => {
                     if let ASTNode::Variable { name: module_name } = object.as_ref() {
@@ -610,7 +611,6 @@ fn generate_instructions(
                             if let Some(&func_index) =
                                 loaded_module.function_indices.get(&function_name)
                             {
-                                // Check if this is a native function
                                 if let Some(module_func) = loaded_module
                                     .definition
                                     .functions
@@ -618,7 +618,6 @@ fn generate_instructions(
                                     .find(|f| f.name == function_name)
                                 {
                                     if module_func.is_native {
-                                        // For native functions, use call_native opcode with native_id
                                         if let Some(call_native_opcode) =
                                             bytecode.get_opcode("call_native")
                                         {
@@ -630,7 +629,6 @@ fn generate_instructions(
                                         } else if let Some(call_global_opcode) =
                                             bytecode.get_opcode("call_global")
                                         {
-                                            // Fallback to call_global if call_native not available
                                             bytecode.emit_instruction_u8_u8(
                                                 call_global_opcode,
                                                 func_index as u8,
@@ -638,7 +636,6 @@ fn generate_instructions(
                                             );
                                         }
                                     } else {
-                                        // For user-defined functions, use regular call
                                         if let Some(call_opcode) = bytecode.get_opcode("call") {
                                             bytecode.emit_instruction_u8_u8(
                                                 call_opcode,
@@ -660,11 +657,9 @@ fn generate_instructions(
         ASTNode::Variable { name } => {
             match get_identifier_string(&name.value) {
                 Ok(var_name) => {
-                    // Check if it's a local variable first
                     if context.variable_map.contains_key(&var_name) {
                         load_variable(bytecode, context, &var_name);
                     } else {
-                        // Fallback to global variable loading
                         let const_index =
                             find_or_add_constant(bytecode, ConstantValue::String(var_name));
                         if let Some(load_global_opcode) = bytecode.get_opcode("load_global") {
@@ -692,7 +687,6 @@ fn generate_instructions(
                         let offset = bytecode.current_offset();
                         bytecode.update_function_offset(func_index, offset);
 
-                        // Create new variable scope for function
                         let old_var_map = context.variable_map.clone();
                         let old_var_counter = context.variable_counter;
 
@@ -704,7 +698,6 @@ fn generate_instructions(
                             bytecode.emit_instruction(return_opcode);
                         }
 
-                        // Restore previous scopes
                         context.variable_map = old_var_map;
                         context.variable_counter = old_var_counter;
                     }
@@ -722,7 +715,6 @@ fn generate_instructions(
                         let offset = bytecode.current_offset();
                         bytecode.update_function_offset(func_index, offset);
 
-                        // Create new variable scope for function
                         let old_var_map = context.variable_map.clone();
                         let old_var_counter = context.variable_counter;
 
@@ -734,7 +726,6 @@ fn generate_instructions(
                             bytecode.emit_instruction(return_opcode);
                         }
 
-                        // Restore previous scopes
                         context.variable_map = old_var_map;
                         context.variable_counter = old_var_counter;
                     }
@@ -814,6 +805,10 @@ fn generate_instructions(
             generate_let_statement(bytecode, context, name, initializer);
         }
 
+        ASTNode::MatchStatement { value, arms } => {
+            generate_match_statement(bytecode, context, value, arms);
+        }
+
         _ => {}
     }
 }
@@ -828,7 +823,6 @@ fn find_or_add_constant(bytecode: &mut BytecodeProgram, value: ConstantValue) ->
                 return i as u16;
             }
             (ConstantValue::Boolean(a), ConstantValue::Boolean(b)) if a == b => return i as u16,
-            (ConstantValue::Null, ConstantValue::Null) => return i as u16,
             _ => continue,
         }
     }
@@ -837,7 +831,7 @@ fn find_or_add_constant(bytecode: &mut BytecodeProgram, value: ConstantValue) ->
 }
 
 fn patch_jump_offset(bytecode: &mut BytecodeProgram, jump_addr: u32, target_addr: u32) {
-    let offset = target_addr - jump_addr - 3;
+    let offset = target_addr - jump_addr;
     let offset_bytes = (offset as u16).to_le_bytes();
 
     if let Some(byte1) = bytecode.instructions.get_mut((jump_addr + 1) as usize) {
@@ -847,7 +841,6 @@ fn patch_jump_offset(bytecode: &mut BytecodeProgram, jump_addr: u32, target_addr
         *byte2 = offset_bytes[1];
     }
 }
-
 
 fn get_identifier_string(value: &TokenValue) -> Result<String, String> {
     match value {
@@ -865,7 +858,6 @@ fn generate_let_statement(
 ) {
     match get_identifier_string(&name.value) {
         Ok(variable_name) => {
-            // Generate initializer expression and store in variable
             generate_instructions(bytecode, context, initializer);
             store_variable(bytecode, context, &variable_name);
         }
@@ -875,9 +867,7 @@ fn generate_let_statement(
     }
 }
 
-/// Store a value from stack into a variable
 fn store_variable(bytecode: &mut BytecodeProgram, context: &mut CompileContext, var_name: &str) {
-    // Get or create variable index
     let var_index = if let Some(&index) = context.variable_map.get(var_name) {
         index
     } else {
@@ -886,14 +876,11 @@ fn store_variable(bytecode: &mut BytecodeProgram, context: &mut CompileContext, 
         context.variable_counter += 1;
         index
     };
-
-    // Emit store_var instruction
     if let Some(store_opcode) = bytecode.get_opcode("store_var") {
         bytecode.emit_instruction_u16(store_opcode, var_index);
     }
 }
 
-/// Load a variable value onto the stack
 fn load_variable(bytecode: &mut BytecodeProgram, context: &CompileContext, var_name: &str) {
     if let Some(&var_index) = context.variable_map.get(var_name) {
         if let Some(load_opcode) = bytecode.get_opcode("load_var") {
@@ -904,7 +891,6 @@ fn load_variable(bytecode: &mut BytecodeProgram, context: &CompileContext, var_n
     }
 }
 
-/// Generate bytecode for enum constructor
 fn generate_enum_constructor(
     bytecode: &mut BytecodeProgram,
     context: &mut CompileContext,
@@ -928,14 +914,10 @@ fn generate_enum_constructor(
         }
     };
 
-    // Look up the enum in the context
     if let Some(&enum_index) = context.enum_map.get(&enum_name_str) {
-        // Generate bytecode for all field values first (push them onto stack)
         for value in values {
             generate_instructions(bytecode, context, value);
         }
-
-        // Find the variant index within the enum
         if let Some(enum_def) = bytecode.enums.get(enum_index as usize) {
             let mut variant_index = None;
             for (i, variant) in enum_def.variants.iter().enumerate() {
@@ -950,7 +932,6 @@ fn generate_enum_constructor(
             }
 
             if let Some(variant_idx) = variant_index {
-                // Validate field count matches
                 if values.len() != field_names.len() {
                     eprintln!(
                         "Compile error: Enum constructor field count mismatch. Expected {}, got {}",
@@ -959,11 +940,6 @@ fn generate_enum_constructor(
                     );
                     return;
                 }
-
-                // Emit create_enum instruction with:
-                // - enum_index: which enum type
-                // - variant_index: which variant within the enum
-                // - field_count: how many fields to pop from stack
                 if let Some(create_enum_opcode) = bytecode.get_opcode("create_enum") {
                     bytecode.emit_instruction_u8_u8_u8(
                         create_enum_opcode,
@@ -989,27 +965,17 @@ fn generate_enum_constructor(
     }
 }
 
-fn compile(ast: ASTProgram) -> BytecodeProgram {
-    compile_program(ast)
-}
-
-/// Check if the import path represents a local file
 fn is_local_file_import(module_path: &str) -> bool {
-    // Check for common local file patterns
-    module_path.contains("/") ||           // Has path separators
-    module_path.contains("\\") ||          // Windows path separators  
-    module_path.starts_with("./") ||       // Relative path
-    module_path.starts_with("../") ||      // Parent directory
-    module_path.ends_with(".mir") ||       // Explicit file extension
-    Path::new(module_path).exists() // File exists in filesystem
+    module_path.contains("/") ||
+    module_path.contains("\\") ||
+    module_path.starts_with("./") ||
+    module_path.starts_with("../") ||
+    module_path.ends_with(".mir") ||
+    Path::new(module_path).exists()
 }
 
-/// Load a module from a local file
 fn load_local_module(module_path: &str, bytecode: &mut BytecodeProgram) -> Option<LoadedModule> {
-    // Resolve the actual file path
     let file_path = resolve_module_path(module_path)?;
-
-    // Read and parse the file
     let source = fs::read_to_string(&file_path).ok()?;
     let lexer = Lexer::new(&source);
     let mut parser = Parser::new(lexer);
@@ -1020,17 +986,12 @@ fn load_local_module(module_path: &str, bytecode: &mut BytecodeProgram) -> Optio
         return None;
     }
 
-    // Extract module definition from AST
     let module_def = extract_module_definition(&ast, module_path);
-
-    // Create loaded module using the same logic as registry modules
     let mut loaded_module = LoadedModule {
         definition: module_def.clone(),
         function_indices: HashMap::new(),
         constant_indices: HashMap::new(),
     };
-
-    // Add module constants to bytecode
     for (i, constant) in module_def.constants.iter().enumerate() {
         let const_name = format!("{}._const_{}", module_path, i);
         let const_index = bytecode.add_constant(constant.clone());
@@ -1038,15 +999,12 @@ fn load_local_module(module_path: &str, bytecode: &mut BytecodeProgram) -> Optio
             .constant_indices
             .insert(const_name, const_index);
     }
-
-    // Add module functions to bytecode
     for func in &module_def.functions {
         let func_index = bytecode.add_function(func.arg_count, 0, 0); // Local count will be determined later
         loaded_module
             .function_indices
             .insert(func.name.clone(), func_index);
 
-        // Add function name as constant for runtime lookup
         let func_name_const = format!("{}.{}", module_path, func.name);
         bytecode.add_constant(ConstantValue::String(func_name_const));
     }
@@ -1054,22 +1012,16 @@ fn load_local_module(module_path: &str, bytecode: &mut BytecodeProgram) -> Optio
     Some(loaded_module)
 }
 
-/// Resolve module path to actual file path
 fn resolve_module_path(module_path: &str) -> Option<String> {
-    // If it already has .mir extension, use as-is
     if module_path.ends_with(".mir") {
         if Path::new(module_path).exists() {
             return Some(module_path.to_string());
         }
     }
-
-    // Try adding .mir extension
     let with_extension = format!("{}.mir", module_path);
     if Path::new(&with_extension).exists() {
         return Some(with_extension);
     }
-
-    // Try relative paths
     let relative_paths = vec![
         format!("./{}", module_path),
         format!("./{}.mir", module_path),
@@ -1086,12 +1038,9 @@ fn resolve_module_path(module_path: &str) -> Option<String> {
     None
 }
 
-/// Extract module definition from AST (exported functions and constants)
 fn extract_module_definition(ast: &ASTProgram, module_name: &str) -> ModuleDefinition {
     let mut functions = Vec::new();
     let constants = Vec::new();
-
-    // Extract all function statements as exported functions
     for node in &ast.nodes {
         match node {
             ASTNode::FunctionStatement { name, params, .. } => {
@@ -1100,7 +1049,7 @@ fn extract_module_definition(ast: &ASTProgram, module_name: &str) -> ModuleDefin
                         functions.push(ModuleFunction {
                             name: func_name,
                             arg_count: params.len() as u8,
-                            is_native: false, // User-defined function
+                            is_native: false,
                             native_id: None,
                         });
                     }
@@ -1115,7 +1064,7 @@ fn extract_module_definition(ast: &ASTProgram, module_name: &str) -> ModuleDefin
                         functions.push(ModuleFunction {
                             name: func_name,
                             arg_count: params.len() as u8,
-                            is_native: false, // User-defined async function
+                            is_native: false,
                             native_id: None,
                         });
                     }
@@ -1124,7 +1073,6 @@ fn extract_module_definition(ast: &ASTProgram, module_name: &str) -> ModuleDefin
                     }
                 }
             }
-            // Could extend to extract constants, enums, etc.
             _ => {}
         }
     }
@@ -1133,5 +1081,221 @@ fn extract_module_definition(ast: &ASTProgram, module_name: &str) -> ModuleDefin
         name: module_name.to_string(),
         functions,
         constants,
+    }
+}
+
+fn generate_match_statement(
+    bytecode: &mut BytecodeProgram,
+    context: &mut CompileContext,
+    value: &ASTNode,
+    arms: &[super::ast::MatchArm],
+) {
+    validate_match_arms_field_consistency(context, arms);
+    generate_instructions(bytecode, context, value);
+
+    let mut match_end_jumps: Vec<u32> = Vec::new();
+    for arm in arms.iter() {
+        let mut arm_success_jumps: Vec<u32> = Vec::new();
+        for pattern in arm.patterns.iter() {
+            if let Some(dup_opcode) = bytecode.get_opcode("dup") {
+                bytecode.emit_instruction(dup_opcode);
+            }
+            generate_pattern_match(bytecode, context, pattern);
+            if let Some(jump_if_true_opcode) = bytecode.get_opcode("jump_if_true") {
+                let jump_to_arm_body = bytecode.current_offset();
+                bytecode.emit_instruction_u16(jump_if_true_opcode, 0);
+                arm_success_jumps.push(jump_to_arm_body);
+            }
+        }
+        let skip_to_next_arm = if let Some(jump_opcode) = bytecode.get_opcode("jump") {
+            let jump_addr = bytecode.current_offset();
+            bytecode.emit_instruction_u16(jump_opcode, 0);
+            Some(jump_addr)
+        } else {
+            None
+        };
+        let arm_body_start = bytecode.current_offset();
+        for jump_addr in arm_success_jumps {
+            patch_jump_offset(bytecode, jump_addr, arm_body_start);
+        }
+        if let Some(pop_opcode) = bytecode.get_opcode("pop") {
+            bytecode.emit_instruction(pop_opcode);
+        }
+        bind_pattern_variables(bytecode, context, &arm.patterns[0]);
+        generate_instructions(bytecode, context, &arm.expression);
+        if let Some(jump_opcode) = bytecode.get_opcode("jump") {
+            let end_jump = bytecode.current_offset();
+            bytecode.emit_instruction_u16(jump_opcode, 0);
+            match_end_jumps.push(end_jump);
+        }
+        let next_arm_start = bytecode.current_offset();
+        if let Some(skip_addr) = skip_to_next_arm {
+            patch_jump_offset(bytecode, skip_addr, next_arm_start);
+        }
+    }
+    if let Some(match_fail_opcode) = bytecode.get_opcode("match_fail") {
+        bytecode.emit_instruction(match_fail_opcode);
+    }
+    let match_end = bytecode.current_offset();
+    for jump_addr in match_end_jumps {
+        patch_jump_offset(bytecode, jump_addr, match_end);
+    }
+}
+
+fn generate_pattern_match(
+    bytecode: &mut BytecodeProgram,
+    context: &CompileContext,
+    pattern: &ASTNode,
+) {
+    match pattern {
+        ASTNode::Literal { token } => {
+            let const_index = match &token.value {
+                crate::library::lexer::TokenValue::String(s) => {
+                    find_or_add_constant(bytecode, ConstantValue::String(s.clone()))
+                }
+                crate::library::lexer::TokenValue::Number(n) => {
+                    find_or_add_constant(bytecode, ConstantValue::Number(*n))
+                }
+                _ => return,
+            };
+
+            if let Some(match_literal_opcode) = bytecode.get_opcode("match_literal") {
+                bytecode.emit_instruction_u16(match_literal_opcode, const_index);
+            }
+        }
+
+        ASTNode::BoolLiteral { value } => {
+            let const_index = find_or_add_constant(bytecode, ConstantValue::Boolean(*value));
+            if let Some(match_literal_opcode) = bytecode.get_opcode("match_literal") {
+                bytecode.emit_instruction_u16(match_literal_opcode, const_index);
+            }
+        }
+        ASTNode::EnumDeconstructPattern {
+            enum_name,
+            variant_name,
+            field_names: _,
+        } => {
+            let enum_name_str = match get_identifier_string(&enum_name.value) {
+                Ok(name) => name,
+                Err(err) => {
+                    eprintln!("Compile error: {}", err);
+                    return;
+                }
+            };
+            let variant_name_str = match get_identifier_string(&variant_name.value) {
+                Ok(name) => name,
+                Err(err) => {
+                    eprintln!("Compile error: {}", err);
+                    return;
+                }
+            };
+
+            if let Some(&enum_index) = context.enum_map.get(&enum_name_str) {
+                // Find variant index
+                if let Some(enum_def) = bytecode.enums.get(enum_index as usize) {
+                    let mut variant_index = None;
+                    for (i, variant) in enum_def.variants.iter().enumerate() {
+                        if let Some(variant_const) =
+                            bytecode.constants.get(variant.name_index as usize)
+                        {
+                            if let ConstantValue::String(name) = &variant_const.value {
+                                if name == &variant_name_str {
+                                    variant_index = Some(i as u8);
+                                    break;
+                                }
+                            }
+                        }
+                    }
+
+                    if let Some(variant_idx) = variant_index {
+                        // Emit match_enum_variant instruction
+                        if let Some(match_enum_opcode) = bytecode.get_opcode("match_enum_variant") {
+                            bytecode.emit_instruction_u8_u8(
+                                match_enum_opcode,
+                                enum_index as u8,
+                                variant_idx,
+                            );
+                        }
+                    }
+                }
+            }
+        }
+        ASTNode::Variable { name: _ } => {
+            let true_const = find_or_add_constant(bytecode, ConstantValue::Boolean(true));
+            if let Some(load_const_opcode) = bytecode.get_opcode("load_const") {
+                bytecode.emit_instruction_u16(load_const_opcode, true_const);
+            }
+        }
+
+        _ => {
+            eprintln!("Compile error: Unsupported pattern type in match statement");
+        }
+    }
+}
+
+fn bind_pattern_variables(
+    bytecode: &mut BytecodeProgram,
+    context: &mut CompileContext,
+    pattern: &ASTNode,
+) {
+    match pattern {
+        ASTNode::EnumDeconstructPattern { field_names, .. } => {
+            for (field_index, field_token) in field_names.iter().enumerate() {
+                if let Ok(field_name) = get_identifier_string(&field_token.value) {
+                    // Duplicate the enum value on stack
+                    if let Some(dup_opcode) = bytecode.get_opcode("dup") {
+                        bytecode.emit_instruction(dup_opcode);
+                    }
+
+                    // Extract the field value
+                    if let Some(extract_field_opcode) = bytecode.get_opcode("extract_enum_field") {
+                        bytecode.emit_instruction_u8(extract_field_opcode, field_index as u8);
+                    }
+
+                    // Store in local variable
+                    store_variable(bytecode, context, &field_name);
+                }
+            }
+            if let Some(pop_opcode) = bytecode.get_opcode("pop") {
+                bytecode.emit_instruction(pop_opcode);
+            }
+        }
+
+        ASTNode::Variable { name } => {
+            if let Ok(var_name) = get_identifier_string(&name.value) {
+                store_variable(bytecode, context, &var_name);
+            }
+        }
+
+        _ => {}
+    }
+}
+
+fn validate_match_arms_field_consistency(_context: &CompileContext, arms: &[super::ast::MatchArm]) {
+    for arm in arms {
+        if arm.patterns.len() > 1 {
+            let mut expected_fields: Option<Vec<String>> = None;
+
+            for pattern in &arm.patterns {
+                if let ASTNode::EnumDeconstructPattern { field_names, .. } = pattern {
+                    let current_fields: Vec<String> = field_names
+                        .iter()
+                        .filter_map(|token| get_identifier_string(&token.value).ok())
+                        .collect();
+
+                    if let Some(ref expected) = expected_fields {
+                        if *expected != current_fields {
+                            eprintln!(
+                                "Compile error: Inconsistent field names in OR pattern. Expected {:?}, got {:?}",
+                                expected, current_fields
+                            );
+                            return;
+                        }
+                    } else {
+                        expected_fields = Some(current_fields);
+                    }
+                }
+            }
+        }
     }
 }

@@ -60,12 +60,11 @@ impl<'a> Parser<'a> {
             .rules
             .get(&self.previous.kind)
             .and_then(|rule| rule.nud.as_ref())
-            .cloned(); // <-- get an owned copy (Box) of the closure
+            .cloned();
 
         let mut left = if let Some(nud) = nud {
             nud(self, self.previous.clone())
         } else {
-            println!("{:?}", self.previous.kind);
             self.error("Expected expression");
             return None;
         };

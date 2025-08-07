@@ -12,10 +12,8 @@ use std::process::exit;
 fn main() {
     let args: Vec<String> = env::args().collect();
     
-    // Handle command line arguments
     match args.len() {
         1 => {
-            // No arguments - show intro and help
             print_intro();
             println!();
             print_help();
@@ -33,11 +31,8 @@ fn main() {
                     exit(0);
                 }
                 filename => {
-                    // Show intro first
                     print_intro();
                     println!();
-                    
-                    // Run the file
                     run_file(filename);
                 }
             }

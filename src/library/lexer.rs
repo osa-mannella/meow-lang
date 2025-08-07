@@ -219,7 +219,7 @@ impl<'a> Lexer<'a> {
             };
         }
 
-        self.advance(); // consume closing quote
+        self.advance();
         Token {
             kind: TokenKind::String,
             value: TokenValue::String(text),
