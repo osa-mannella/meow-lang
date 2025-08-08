@@ -1,5 +1,5 @@
 use super::ast::{ASTNode, ASTProgram};
-use super::lexer::{Lexer, Token, TokenKind};
+use super::lexer::{Lexer, Token, TokenKind, TokenValue};
 use std::{collections::HashMap, sync::Arc};
 
 type ParseResult = Option<ASTNode>;
@@ -98,8 +98,88 @@ impl<'a> Parser<'a> {
             TokenKind::String => ASTNode::Literal {
                 token: token.clone(),
             },
+            TokenKind::InterpolatedString => self.parse_interpolated_string(token)?,
             _ => ASTNode::Literal { token },
         })
+    }
+
+    fn parse_interpolated_string(&mut self, initial_token: Token) -> ParseResult {
+        let mut parts = Vec::new();
+        
+        if let TokenValue::String(s) = &initial_token.value {
+            // Parse the interpolated string content
+            let mut chars = s.chars().peekable();
+            let mut current_str = String::new();
+            
+            while let Some(ch) = chars.next() {
+                if ch == '$' && chars.peek() == Some(&'{') {
+                    // Add current string part if not empty
+                    if !current_str.is_empty() {
+                        parts.push(ASTNode::Literal {
+                            token: Token {
+                                kind: TokenKind::String,
+                                value: TokenValue::String(current_str.clone()),
+                                line: initial_token.line,
+                            }
+                        });
+                        current_str.clear();
+                    }
+                    
+                    chars.next(); // consume '{'
+                    
+                    // Extract expression until '}'
+                    let mut expr_str = String::new();
+                    let mut brace_count = 1;
+                    
+                    while let Some(ch) = chars.next() {
+                        if ch == '{' {
+                            brace_count += 1;
+                            expr_str.push(ch);
+                        } else if ch == '}' {
+                            brace_count -= 1;
+                            if brace_count == 0 {
+                                break;
+                            }
+                            expr_str.push(ch);
+                        } else {
+                            expr_str.push(ch);
+                        }
+                    }
+                    
+                    if brace_count != 0 {
+                        self.error("Unclosed interpolation expression");
+                        return None;
+                    }
+                    
+                    // Parse the expression string
+                    if !expr_str.is_empty() {
+                        let lexer = Lexer::new(&expr_str);
+                        let mut parser = Parser::new(lexer);
+                        if let Some(expr) = parser.parse_expression(0) {
+                            parts.push(expr);
+                        } else {
+                            self.error("Invalid expression in string interpolation");
+                            return None;
+                        }
+                    }
+                } else {
+                    current_str.push(ch);
+                }
+            }
+            
+            // Add remaining string part if not empty
+            if !current_str.is_empty() {
+                parts.push(ASTNode::Literal {
+                    token: Token {
+                        kind: TokenKind::String,
+                        value: TokenValue::String(current_str),
+                        line: initial_token.line,
+                    }
+                });
+            }
+        }
+        
+        Some(ASTNode::StringInterpolation { parts })
     }
 
     fn parse_grouping(&mut self, _token: Token) -> ParseResult {
@@ -830,6 +910,14 @@ impl<'a> Parser<'a> {
         );
         rules.insert(
             String,
+            ParseRule {
+                nud: Some(Arc::new(|s, t| s.parse_literal(t))),
+                led: None,
+                lbp: 0,
+            },
+        );
+        rules.insert(
+            InterpolatedString,
             ParseRule {
                 nud: Some(Arc::new(|s, t| s.parse_literal(t))),
                 led: None,
@@ -1706,5 +1794,53 @@ func multiline(x, y) {
         let result = parse_source("  let   x   =   42   ").unwrap();
         assert_eq!(result.nodes.len(), 1);
         matches!(result.nodes[0], ASTNode::LetStatement { .. });
+    }
+
+    #[test]
+    fn test_string_interpolation_simple() {
+        let result = parse_expression(r#"$"Hello ${name}!""#).unwrap();
+        if let ASTNode::StringInterpolation { parts } = result {
+            assert_eq!(parts.len(), 3); // "Hello ", name, "!"
+            // First part should be a string literal
+            if let ASTNode::Literal { token } = &parts[0] {
+                if let TokenValue::String(s) = &token.value {
+                    assert_eq!(s, "Hello ");
+                } else {
+                    panic!("Expected string value in first part");
+                }
+            } else {
+                panic!("Expected literal node in first part");
+            }
+            // Second part should be a variable
+            matches!(parts[1], ASTNode::Variable { .. });
+            // Third part should be a string literal
+            if let ASTNode::Literal { token } = &parts[2] {
+                if let TokenValue::String(s) = &token.value {
+                    assert_eq!(s, "!");
+                } else {
+                    panic!("Expected string value in third part");
+                }
+            } else {
+                panic!("Expected literal node in third part");
+            }
+        } else {
+            panic!("Expected string interpolation node");
+        }
+    }
+
+    #[test]
+    fn test_string_interpolation_multiple_expressions() {
+        let result = parse_expression(r#"$"Result: ${x + y} (${type})""#).unwrap();
+        if let ASTNode::StringInterpolation { parts } = result {
+            assert_eq!(parts.len(), 5); // "Result: ", x+y, " (", type, ")"
+            // Check that we have the correct structure
+            matches!(parts[0], ASTNode::Literal { .. });
+            matches!(parts[1], ASTNode::Binary { .. }); // x + y
+            matches!(parts[2], ASTNode::Literal { .. });
+            matches!(parts[3], ASTNode::Variable { .. }); // type
+            matches!(parts[4], ASTNode::Literal { .. });
+        } else {
+            panic!("Expected string interpolation node");
+        }
     }
 }

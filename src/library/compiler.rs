@@ -111,6 +111,8 @@ impl BytecodeProgram {
         opcode_map.insert("extract_enum_field".to_string(), 0x56);
         opcode_map.insert("match_fail".to_string(), 0x57);
 
+        opcode_map.insert("string_concat".to_string(), 0x58);
+
         opcode_map.insert("halt".to_string(), 0xFF);
 
         Self {
@@ -515,6 +517,12 @@ fn collect_constants(bytecode: &mut BytecodeProgram, context: &CompileContext, n
             collect_constants(bytecode, context, expression);
         }
 
+        ASTNode::StringInterpolation { parts } => {
+            for part in parts {
+                collect_constants(bytecode, context, part);
+            }
+        }
+
         ASTNode::Variable { .. }
         | ASTNode::ImportStatement { .. }
         | ASTNode::EnumDeconstructPattern { .. }
@@ -827,6 +835,20 @@ fn generate_instructions(
 
         ASTNode::MatchStatement { value, arms } => {
             generate_match_statement(bytecode, context, value, arms);
+        }
+
+        ASTNode::StringInterpolation { parts } => {
+            // Generate instructions to load each part onto the stack
+            for part in parts {
+                generate_instructions(bytecode, context, part);
+            }
+            
+            // Generate string concatenation instructions
+            if parts.len() > 1 {
+                if let Some(concat_opcode) = bytecode.get_opcode("string_concat") {
+                    bytecode.emit_instruction_u8(concat_opcode, parts.len() as u8);
+                }
+            }
         }
 
         _ => {}
@@ -1917,5 +1939,47 @@ let result = factorial(5)
 
         let store_var_opcode = bytecode.get_opcode("store_var").unwrap();
         assert!(bytecode.instructions.contains(&store_var_opcode));
+    }
+
+    #[test]
+    fn test_string_interpolation_compilation() {
+        let bytecode = compile_expression(r#"$"Hello ${name}!""#).unwrap();
+
+        // Should contain the string constants
+        assert!(
+            bytecode
+                .constants
+                .iter()
+                .any(|c| { matches!(c.value, ConstantValue::String(ref s) if s == "Hello ") })
+        );
+        assert!(
+            bytecode
+                .constants
+                .iter()
+                .any(|c| { matches!(c.value, ConstantValue::String(ref s) if s == "!") })
+        );
+
+        // Should have string concatenation instruction
+        let concat_opcode = bytecode.get_opcode("string_concat");
+        assert!(concat_opcode.is_some());
+    }
+
+    #[test]
+    fn test_string_interpolation_multiple_expressions() {
+        let bytecode = compile_expression(r#"$"Result: ${x + y}""#).unwrap();
+
+        // Should contain the string constant
+        assert!(
+            bytecode
+                .constants
+                .iter()
+                .any(|c| { matches!(c.value, ConstantValue::String(ref s) if s == "Result: ") })
+        );
+
+        // Should have addition and string concatenation instructions
+        let add_opcode = bytecode.get_opcode("add");
+        let concat_opcode = bytecode.get_opcode("string_concat");
+        assert!(add_opcode.is_some());
+        assert!(concat_opcode.is_some());
     }
 }

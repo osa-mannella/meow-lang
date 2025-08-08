@@ -245,6 +245,15 @@ pub fn print_bytecode_debug(bytecode: &BytecodeProgram) {
                         i += 1;
                     }
                 }
+                "string_concat" => {
+                    if i + 1 < bytecode.instructions.len() {
+                        println!("parts={}", bytecode.instructions[i + 1]);
+                        i += 2;
+                    } else {
+                        println!("(incomplete operand)");
+                        i += 1;
+                    }
+                }
                 "add" | "sub" | "mul" | "div" | "equal" | "not_equal" | "less" | "greater" 
                 | "less_equal" | "greater_equal" | "and" | "or" | "pop" | "dup"
                 | "return" | "halt" | "match_fail" => {

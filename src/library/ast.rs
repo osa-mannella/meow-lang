@@ -1,4 +1,4 @@
-use super::lexer::Token; // assuming Token is defined in your lexer module
+use super::lexer::{Token, TokenValue}; // assuming Token is defined in your lexer module
 
 #[derive(Debug, Clone)]
 pub enum ASTNode {
@@ -107,6 +107,9 @@ pub enum ASTNode {
     },
     AwaitExpression {
         expression: Box<ASTNode>,
+    },
+    StringInterpolation {
+        parts: Vec<ASTNode>,
     },
 }
 
@@ -396,6 +399,24 @@ impl ASTNode {
                     }
                 }
                 print!(")");
+            }
+            StringInterpolation { parts } => {
+                print!("\"");
+                for part in parts {
+                    match part {
+                        ASTNode::Literal { token } => {
+                            if let TokenValue::String(s) = &token.value {
+                                print!("{}", s);
+                            }
+                        }
+                        _ => {
+                            print!("${{");
+                            part.print();
+                            print!("}}");
+                        }
+                    }
+                }
+                print!("\"");
             }
         }
     }

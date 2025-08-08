@@ -3,6 +3,7 @@ pub enum TokenKind {
     Identifier,
     Number,
     String,
+    InterpolatedString,
 
     Let,
     Func,
@@ -195,6 +196,10 @@ impl<'a> Lexer<'a> {
     }
 
     fn make_string(&mut self) -> Option<Token> {
+        self.make_regular_string()
+    }
+
+    fn make_regular_string(&mut self) -> Option<Token> {
         let mut string = String::new();
         self.advance(); // consume opening quote
 
@@ -231,6 +236,66 @@ impl<'a> Lexer<'a> {
         Some(Token {
             kind: TokenKind::Error,
             value: TokenValue::Error("Unterminated string".to_string()),
+            line: self.line,
+        })
+    }
+
+    fn make_interpolated_string(&mut self) -> Option<Token> {
+        let mut string = String::new();
+        self.advance(); // consume opening quote
+
+        while let Some(ch) = self.current {
+            if ch == '"' {
+                self.advance(); // consume closing quote
+                return Some(Token {
+                    kind: TokenKind::InterpolatedString,
+                    value: TokenValue::String(string),
+                    line: self.line,
+                });
+            } else if ch == '\\' {
+                self.advance();
+                if let Some(escaped) = self.current {
+                    match escaped {
+                        'n' => {
+                            string.push('\\');
+                            string.push('n');
+                        },
+                        't' => {
+                            string.push('\\');
+                            string.push('t');
+                        },
+                        'r' => {
+                            string.push('\\');
+                            string.push('r');
+                        },
+                        '\\' => {
+                            string.push('\\');
+                            string.push('\\');
+                        },
+                        '"' => {
+                            string.push('\\');
+                            string.push('"');
+                        },
+                        '$' => {
+                            string.push('\\');
+                            string.push('$');
+                        },
+                        _ => {
+                            string.push('\\');
+                            string.push(escaped);
+                        }
+                    }
+                    self.advance();
+                }
+            } else {
+                string.push(ch);
+                self.advance();
+            }
+        }
+
+        Some(Token {
+            kind: TokenKind::Error,
+            value: TokenValue::Error("Unterminated interpolated string".to_string()),
             line: self.line,
         })
     }
@@ -415,12 +480,17 @@ impl<'a> Lexer<'a> {
                 })
             }
             '$' => {
-                self.advance();
-                Some(Token {
-                    kind: TokenKind::Dollar,
-                    value: TokenValue::None,
-                    line: self.line,
-                })
+                if self.peek() == Some('"') {
+                    self.advance(); // consume '$'
+                    self.make_interpolated_string()
+                } else {
+                    self.advance();
+                    Some(Token {
+                        kind: TokenKind::Dollar,
+                        value: TokenValue::None,
+                        line: self.line,
+                    })
+                }
             }
 
             // Multi-character tokens
@@ -964,5 +1034,33 @@ mod tests {
         let tokens = tokenize_all(source);
 
         assert_eq!(tokens.len(), 0);
+    }
+
+    #[test]
+    fn test_interpolated_strings() {
+        let source = r#"$"Hello ${name}!""#;
+        let tokens = tokenize_all(source);
+
+        assert_eq!(tokens.len(), 1);
+        assert_eq!(tokens[0].kind, TokenKind::InterpolatedString);
+        if let TokenValue::String(s) = &tokens[0].value {
+            assert_eq!(s, "Hello ${name}!");
+        } else {
+            panic!("Expected string value in interpolated string token");
+        }
+    }
+
+    #[test]
+    fn test_interpolated_strings_multiple_expressions() {
+        let source = r#"$"User ${user} has ${count} items""#;
+        let tokens = tokenize_all(source);
+
+        assert_eq!(tokens.len(), 1);
+        assert_eq!(tokens[0].kind, TokenKind::InterpolatedString);
+        if let TokenValue::String(s) = &tokens[0].value {
+            assert_eq!(s, "User ${user} has ${count} items");
+        } else {
+            panic!("Expected string value in interpolated string token");
+        }
     }
 }
