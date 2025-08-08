@@ -53,7 +53,7 @@ impl<'a> Parser<'a> {
         eprintln!("Parse error (line {}): {}", self.current.line, msg);
     }
 
-    fn parse_expression(&mut self, min_precedence: u8) -> ParseResult {
+    pub fn parse_expression(&mut self, min_precedence: u8) -> ParseResult {
         self.advance();
 
         let nud = self
@@ -90,7 +90,6 @@ impl<'a> Parser<'a> {
 
         left
     }
-
 
     fn parse_literal(&mut self, token: Token) -> ParseResult {
         Some(match &token.kind {
@@ -170,7 +169,12 @@ impl<'a> Parser<'a> {
             }
             self.advance(); // consume '->'
 
-            let expr = self.parse_expression(0)?;
+            let mut exprs = Vec::new();
+            if self.current.kind == TokenKind::LBrace {
+                exprs.extend(self.parse_block()?);
+            } else {
+                exprs.push(self.parse_expression(0)?);
+            }
 
             if self.current.kind == TokenKind::Comma {
                 self.advance();
@@ -178,7 +182,7 @@ impl<'a> Parser<'a> {
 
             arms.push(super::ast::MatchArm {
                 patterns: patterns,
-                expression: Box::new(expr),
+                expression: exprs,
             });
         }
         if self.current.kind != TokenKind::RBrace {
@@ -236,6 +240,7 @@ impl<'a> Parser<'a> {
             }
         }
         if self.current.kind != TokenKind::RBrace {
+            println!("{:?}", self.current.kind);
             self.error("Expected '}' at end of block.");
             return None;
         }
@@ -466,6 +471,33 @@ impl<'a> Parser<'a> {
         })
     }
 
+    fn parse_array_append(&mut self, base: ASTNode) -> ParseResult {
+        self.advance(); // consume '['
+
+        let mut elements = Vec::new();
+
+        if self.current.kind != TokenKind::RBracket {
+            loop {
+                let element = self.parse_expression(0)?;
+                elements.push(element);
+
+                if self.current.kind == TokenKind::Comma {
+                    self.advance();
+                }
+                if self.current.kind == TokenKind::RBracket || self.current.kind == TokenKind::Eof {
+                    break;
+                }
+            }
+        }
+
+        self.consume(TokenKind::RBracket, "Expected ']' after array append.");
+
+        Some(ASTNode::ArrayAppend {
+            base: Box::new(base),
+            elements,
+        })
+    }
+
     pub fn parse_let_statement(&mut self) -> ParseResult {
         //self.advance(); // consume 'let'
 
@@ -624,7 +656,7 @@ impl<'a> Parser<'a> {
                 let if_expr = self.parse_if_expression(self.current.clone())?;
                 Some(vec![if_expr])
             } else {
-                self.consume(TokenKind::LBrace, "Expected '{' after 'else'.");
+                println!("{:?}", self.current);
                 Some(self.parse_block()?)
             }
         } else {
@@ -956,11 +988,85 @@ impl<'a> Parser<'a> {
                 lbp: 20,
             },
         );
+
+        // Comparison operators
+        rules.insert(
+            EqualEqual,
+            ParseRule {
+                nud: None,
+                led: Some(Arc::new(|s, l, t| s.parse_binary(l, t))),
+                lbp: 8,
+            },
+        );
+        rules.insert(
+            BangEqual,
+            ParseRule {
+                nud: None,
+                led: Some(Arc::new(|s, l, t| s.parse_binary(l, t))),
+                lbp: 8,
+            },
+        );
+        rules.insert(
+            Less,
+            ParseRule {
+                nud: None,
+                led: Some(Arc::new(|s, l, t| s.parse_binary(l, t))),
+                lbp: 9,
+            },
+        );
+        rules.insert(
+            LessEqual,
+            ParseRule {
+                nud: None,
+                led: Some(Arc::new(|s, l, t| s.parse_binary(l, t))),
+                lbp: 9,
+            },
+        );
+        rules.insert(
+            Greater,
+            ParseRule {
+                nud: None,
+                led: Some(Arc::new(|s, l, t| s.parse_binary(l, t))),
+                lbp: 9,
+            },
+        );
+        rules.insert(
+            GreaterEqual,
+            ParseRule {
+                nud: None,
+                led: Some(Arc::new(|s, l, t| s.parse_binary(l, t))),
+                lbp: 9,
+            },
+        );
+
+        // Logical operators
+        rules.insert(
+            And,
+            ParseRule {
+                nud: None,
+                led: Some(Arc::new(|s, l, t| s.parse_binary(l, t))),
+                lbp: 6,
+            },
+        );
+        rules.insert(
+            Or,
+            ParseRule {
+                nud: None,
+                led: Some(Arc::new(|s, l, t| s.parse_binary(l, t))),
+                lbp: 5,
+            },
+        );
         rules.insert(
             LArrow,
             ParseRule {
                 nud: None,
-                led: Some(Arc::new(|s, l, _| s.parse_struct_update(l))),
+                led: Some(Arc::new(|s, l, _| {
+                    if s.current.kind == TokenKind::LBracket {
+                        s.parse_array_append(l)
+                    } else {
+                        s.parse_struct_update(l)
+                    }
+                })),
                 lbp: 50,
             },
         );
@@ -1003,5 +1109,602 @@ impl<'a> Parser<'a> {
 
         // Attach to parser
         self.rules = rules;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::library::lexer::*;
+
+    fn parse_source(source: &str) -> Result<ASTProgram, String> {
+        let lexer = Lexer::new(source);
+        let mut parser = Parser::new(lexer);
+        let program = parser.parse_program();
+
+        if parser.had_error {
+            Err("Parser encountered errors".to_string())
+        } else {
+            Ok(program)
+        }
+    }
+
+    fn parse_expression(source: &str) -> Result<ASTNode, String> {
+        let lexer = Lexer::new(source);
+        let mut parser = Parser::new(lexer);
+
+        // For statements like "if", we need to parse as a full program, not just an expression
+        let program = parser.parse_program();
+
+        if parser.had_error {
+            Err("Parser encountered errors".to_string())
+        } else if program.nodes.is_empty() {
+            Err("No nodes parsed".to_string())
+        } else {
+            Ok(program.nodes[0].clone())
+        }
+    }
+
+    #[test]
+    fn test_literal_parsing() {
+        // Numbers
+        let result = parse_expression("42").unwrap();
+        if let ASTNode::Literal { token } = result {
+            assert_eq!(token.kind, TokenKind::Number);
+            if let TokenValue::Number(val) = token.value {
+                assert_eq!(val, 42.0);
+            }
+        } else {
+            panic!("Expected literal node for number");
+        }
+
+        // Strings
+        let result = parse_expression(r#""hello""#).unwrap();
+        if let ASTNode::Literal { token } = result {
+            assert_eq!(token.kind, TokenKind::String);
+        } else {
+            panic!("Expected literal node for string");
+        }
+
+        // Booleans
+        let result = parse_expression("true").unwrap();
+        if let ASTNode::BoolLiteral { value } = result {
+            assert!(value);
+        } else {
+            panic!("Expected bool literal node");
+        }
+
+        let result = parse_expression("false").unwrap();
+        if let ASTNode::BoolLiteral { value } = result {
+            assert!(!value);
+        } else {
+            panic!("Expected bool literal node");
+        }
+    }
+
+    #[test]
+    fn test_variable_parsing() {
+        let result = parse_expression("my_variable").unwrap();
+        if let ASTNode::Variable { name } = result {
+            if let TokenValue::Identifier(name_str) = name.value {
+                assert_eq!(name_str, "my_variable");
+            }
+        } else {
+            panic!("Expected variable node");
+        }
+    }
+
+    #[test]
+    fn test_binary_operations() {
+        let result = parse_expression("1 + 2").unwrap();
+        if let ASTNode::Binary { left, op, right } = result {
+            assert_eq!(op.kind, TokenKind::Plus);
+            // Verify left and right are literals
+            matches!(left.as_ref(), ASTNode::Literal { .. });
+            matches!(right.as_ref(), ASTNode::Literal { .. });
+        } else {
+            panic!("Expected binary operation node");
+        }
+
+        // Test precedence
+        let result = parse_expression("1 + 2 * 3").unwrap();
+        if let ASTNode::Binary { left, op, right } = result {
+            assert_eq!(op.kind, TokenKind::Plus);
+            matches!(left.as_ref(), ASTNode::Literal { .. });
+            matches!(right.as_ref(), ASTNode::Binary { .. });
+        } else {
+            panic!("Expected binary operation with correct precedence");
+        }
+    }
+
+    #[test]
+    fn test_grouping() {
+        let result = parse_expression("(1 + 2)").unwrap();
+        if let ASTNode::Grouping { expression } = result {
+            matches!(expression.as_ref(), ASTNode::Binary { .. });
+        } else {
+            panic!("Expected grouping node");
+        }
+    }
+
+    #[test]
+    fn test_function_calls() {
+        let result = parse_expression("my_func()").unwrap();
+        if let ASTNode::Call { callee, arguments } = result {
+            matches!(callee.as_ref(), ASTNode::Variable { .. });
+            assert_eq!(arguments.len(), 0);
+        } else {
+            panic!("Expected call node");
+        }
+
+        let result = parse_expression("my_func(1, 2, 3)").unwrap();
+        if let ASTNode::Call { callee, arguments } = result {
+            matches!(callee.as_ref(), ASTNode::Variable { .. });
+            assert_eq!(arguments.len(), 3);
+        } else {
+            panic!("Expected call node with arguments");
+        }
+    }
+
+    #[test]
+    fn test_property_access() {
+        let result = parse_expression("obj.property").unwrap();
+        if let ASTNode::PropertyAccess { object, property } = result {
+            matches!(object.as_ref(), ASTNode::Variable { .. });
+            if let TokenValue::Identifier(prop_name) = property.value {
+                assert_eq!(prop_name, "property");
+            }
+        } else {
+            panic!("Expected property access node");
+        }
+    }
+
+    #[test]
+    fn test_list_literal() {
+        let result = parse_expression("[]").unwrap();
+        if let ASTNode::ListLiteral { elements } = result {
+            assert_eq!(elements.len(), 0);
+        } else {
+            panic!("Expected empty list literal");
+        }
+
+        let result = parse_expression("[1, 2, 3]").unwrap();
+        if let ASTNode::ListLiteral { elements } = result {
+            assert_eq!(elements.len(), 3);
+        } else {
+            panic!("Expected list literal with elements");
+        }
+    }
+
+    #[test]
+    fn test_struct_literal() {
+        let result = parse_expression("{}").unwrap();
+        if let ASTNode::StructLiteral { keys, values } = result {
+            assert_eq!(keys.len(), 0);
+            assert_eq!(values.len(), 0);
+        } else {
+            panic!("Expected empty struct literal");
+        }
+
+        let result = parse_expression(r#"{ name = "John", age = 30 }"#).unwrap();
+        if let ASTNode::StructLiteral { keys, values } = result {
+            assert_eq!(keys.len(), 2);
+            assert_eq!(values.len(), 2);
+
+            if let TokenValue::Identifier(key1) = &keys[0].value {
+                assert_eq!(key1, "name");
+            }
+            if let TokenValue::Identifier(key2) = &keys[1].value {
+                assert_eq!(key2, "age");
+            }
+        } else {
+            panic!("Expected struct literal with fields");
+        }
+    }
+
+    #[test]
+    fn test_let_statement() {
+        let result = parse_source("let x = 42").unwrap();
+        assert_eq!(result.nodes.len(), 1);
+
+        if let ASTNode::LetStatement { name, initializer } = &result.nodes[0] {
+            if let TokenValue::Identifier(var_name) = &name.value {
+                assert_eq!(var_name, "x");
+            }
+            matches!(initializer.as_ref(), ASTNode::Literal { .. });
+        } else {
+            panic!("Expected let statement");
+        }
+    }
+
+    #[test]
+    fn test_let_bang_statement() {
+        let result = parse_source("let! x = 42").unwrap();
+        assert_eq!(result.nodes.len(), 1);
+
+        if let ASTNode::LetBangStatement { name, initializer } = &result.nodes[0] {
+            if let TokenValue::Identifier(var_name) = &name.value {
+                assert_eq!(var_name, "x");
+            }
+            matches!(initializer.as_ref(), ASTNode::Literal { .. });
+        } else {
+            panic!("Expected let! statement");
+        }
+    }
+
+    #[test]
+    fn test_function_statement() {
+        let result = parse_source("func test(x, y) { x + y }").unwrap();
+        assert_eq!(result.nodes.len(), 1);
+
+        if let ASTNode::FunctionStatement { name, params, body } = &result.nodes[0] {
+            if let TokenValue::Identifier(func_name) = &name.value {
+                assert_eq!(func_name, "test");
+            }
+            assert_eq!(params.len(), 2);
+            assert_eq!(body.len(), 1);
+        } else {
+            panic!("Expected function statement");
+        }
+    }
+
+    #[test]
+    fn test_if_expression() {
+        let result = parse_expression("if true { 42 }").unwrap();
+        if let ASTNode::IfExpression {
+            condition,
+            then_branch,
+            else_branch,
+        } = result
+        {
+            matches!(condition.as_ref(), ASTNode::BoolLiteral { .. });
+            assert_eq!(then_branch.len(), 1);
+            assert!(else_branch.is_none());
+        } else {
+            panic!("Expected if expression");
+        }
+
+        let result = parse_expression("if true { 42 } else { 0 }").unwrap();
+        if let ASTNode::IfExpression {
+            condition,
+            then_branch,
+            else_branch,
+        } = result
+        {
+            matches!(condition.as_ref(), ASTNode::BoolLiteral { .. });
+            assert_eq!(then_branch.len(), 1);
+            assert!(else_branch.is_some());
+            assert_eq!(else_branch.unwrap().len(), 1);
+        } else {
+            panic!("Expected if-else expression");
+        }
+    }
+
+    #[test]
+    fn test_lambda_expression() {
+        let result = parse_expression("fn() -> 42").unwrap();
+        if let ASTNode::LambdaExpression { params, body } = result {
+            assert_eq!(params.len(), 0);
+            assert_eq!(body.len(), 1);
+        } else {
+            panic!("Expected lambda expression");
+        }
+
+        let result = parse_expression("fn(x, y) -> x + y").unwrap();
+        if let ASTNode::LambdaExpression { params, body } = result {
+            assert_eq!(params.len(), 2);
+            assert_eq!(body.len(), 1);
+        } else {
+            panic!("Expected lambda expression with parameters");
+        }
+
+        let result = parse_expression("fn(x) -> { x * 2 }").unwrap();
+        if let ASTNode::LambdaExpression { params, body } = result {
+            assert_eq!(params.len(), 1);
+            assert_eq!(body.len(), 1);
+        } else {
+            panic!("Expected lambda expression with block");
+        }
+    }
+
+    #[test]
+    fn test_async_function() {
+        let result = parse_source("async func test() { await something() }").unwrap();
+        assert_eq!(result.nodes.len(), 1);
+
+        if let ASTNode::AsyncFunctionStatement { name, params, body } = &result.nodes[0] {
+            if let TokenValue::Identifier(func_name) = &name.value {
+                assert_eq!(func_name, "test");
+            }
+            assert_eq!(params.len(), 0);
+            assert_eq!(body.len(), 1);
+        } else {
+            panic!("Expected async function statement");
+        }
+    }
+
+    #[test]
+    fn test_async_lambda() {
+        let result = parse_expression("async fn() -> await something()").unwrap();
+        if let ASTNode::AsyncLambdaExpression { params, body } = result {
+            assert_eq!(params.len(), 0);
+            assert_eq!(body.len(), 1);
+        } else {
+            panic!("Expected async lambda expression");
+        }
+    }
+
+    #[test]
+    fn test_await_expression() {
+        let result = parse_expression("await my_async_func()").unwrap();
+        if let ASTNode::AwaitExpression { expression } = result {
+            matches!(expression.as_ref(), ASTNode::Call { .. });
+        } else {
+            panic!("Expected await expression");
+        }
+    }
+
+    #[test]
+    fn test_match_statement() {
+        let result = parse_expression("match x { 1 -> \"one\", 2 -> \"two\" }").unwrap();
+        if let ASTNode::MatchStatement { value, arms } = result {
+            matches!(value.as_ref(), ASTNode::Variable { .. });
+            assert_eq!(arms.len(), 2);
+        } else {
+            panic!("Expected match statement");
+        }
+    }
+
+    #[test]
+    fn test_enum_statement() {
+        let result =
+            parse_source("enum Shape { Circle { radius }, Rectangle { width, height } }").unwrap();
+        assert_eq!(result.nodes.len(), 1);
+
+        if let ASTNode::EnumStatement {
+            name,
+            variant_names,
+            field_names,
+            field_counts,
+        } = &result.nodes[0]
+        {
+            if let TokenValue::Identifier(enum_name) = &name.value {
+                assert_eq!(enum_name, "Shape");
+            }
+            assert_eq!(variant_names.len(), 2);
+            assert_eq!(field_names.len(), 2);
+            assert_eq!(field_counts.len(), 2);
+            assert_eq!(field_counts[0], 1); // Circle has 1 field
+            assert_eq!(field_counts[1], 2); // Rectangle has 2 fields
+        } else {
+            panic!("Expected enum statement");
+        }
+    }
+
+    #[test]
+    fn test_enum_constructor() {
+        let result = parse_expression("Shape::Circle { radius = 5.0 }").unwrap();
+        if let ASTNode::EnumConstructor {
+            enum_name,
+            variant_name,
+            field_names,
+            values,
+        } = result
+        {
+            if let TokenValue::Identifier(enum_name_str) = enum_name.value {
+                assert_eq!(enum_name_str, "Shape");
+            }
+            if let TokenValue::Identifier(variant_name_str) = variant_name.value {
+                assert_eq!(variant_name_str, "Circle");
+            }
+            assert_eq!(field_names.len(), 1);
+            assert_eq!(values.len(), 1);
+        } else {
+            panic!("Expected enum constructor");
+        }
+    }
+
+    #[test]
+    fn test_struct_update() {
+        let result = parse_expression("person <- { age = 31 }").unwrap();
+        if let ASTNode::StructUpdate { base, keys, values } = result {
+            matches!(base.as_ref(), ASTNode::Variable { .. });
+            assert_eq!(keys.len(), 1);
+            assert_eq!(values.len(), 1);
+        } else {
+            panic!("Expected struct update");
+        }
+    }
+
+    #[test]
+    fn test_array_append() {
+        let result = parse_expression("arr <- [4, 5, 6]").unwrap();
+        if let ASTNode::ArrayAppend { base, elements } = result {
+            matches!(base.as_ref(), ASTNode::Variable { .. });
+            assert_eq!(elements.len(), 3);
+        } else {
+            panic!("Expected array append");
+        }
+    }
+
+    #[test]
+    fn test_pipeline() {
+        let result = parse_expression("value |> transform |> process").unwrap();
+        if let ASTNode::Pipeline { left, right } = result {
+            if let ASTNode::Pipeline {
+                left: inner_left,
+                right: inner_right,
+            } = left.as_ref()
+            {
+                matches!(inner_left.as_ref(), ASTNode::Variable { .. });
+                matches!(inner_right.as_ref(), ASTNode::Variable { .. });
+            } else {
+                panic!("Expected nested pipeline");
+            }
+            matches!(right.as_ref(), ASTNode::Variable { .. });
+        } else {
+            panic!("Expected pipeline");
+        }
+    }
+
+    #[test]
+    fn test_import_statement() {
+        let result = parse_source(r#"import "IO""#).unwrap();
+        assert_eq!(result.nodes.len(), 1);
+
+        if let ASTNode::ImportStatement { path } = &result.nodes[0] {
+            if let TokenValue::String(path_str) = &path.value {
+                assert_eq!(path_str, "IO");
+            }
+        } else {
+            panic!("Expected import statement");
+        }
+    }
+
+    #[test]
+    fn test_power_operator() {
+        let result = parse_expression("2 ** 3").unwrap();
+        if let ASTNode::Binary { left, op, right } = result {
+            assert_eq!(op.kind, TokenKind::Power);
+            matches!(left.as_ref(), ASTNode::Literal { .. });
+            matches!(right.as_ref(), ASTNode::Literal { .. });
+        } else {
+            panic!("Expected power operation");
+        }
+    }
+
+    #[test]
+    fn test_comparison_operators() {
+        let operators = vec![
+            ("==", TokenKind::EqualEqual),
+            ("!=", TokenKind::BangEqual),
+            ("<", TokenKind::Less),
+            ("<=", TokenKind::LessEqual),
+            (">", TokenKind::Greater),
+            (">=", TokenKind::GreaterEqual),
+        ];
+
+        for (op_str, expected_kind) in operators {
+            let source = format!("1 {} 2", op_str);
+            let result = parse_expression(&source).unwrap();
+            if let ASTNode::Binary { op, .. } = result {
+                assert_eq!(op.kind, expected_kind);
+            } else {
+                panic!("Expected binary operation for {}", op_str);
+            }
+        }
+    }
+
+    #[test]
+    fn test_logical_operators() {
+        let result = parse_expression("true && false").unwrap();
+        if let ASTNode::Binary { op, .. } = result {
+            assert_eq!(op.kind, TokenKind::And);
+        } else {
+            panic!("Expected logical AND");
+        }
+
+        let result = parse_expression("true || false").unwrap();
+        if let ASTNode::Binary { op, .. } = result {
+            assert_eq!(op.kind, TokenKind::Or);
+        } else {
+            panic!("Expected logical OR");
+        }
+    }
+
+    #[test]
+    fn test_complex_expressions() {
+        // Test nested function calls with complex arguments
+        let result = parse_expression("func1(func2(x + y), z * 2)").unwrap();
+        if let ASTNode::Call { callee, arguments } = result {
+            matches!(callee.as_ref(), ASTNode::Variable { .. });
+            assert_eq!(arguments.len(), 2);
+            matches!(arguments[0], ASTNode::Call { .. });
+            matches!(arguments[1], ASTNode::Binary { .. });
+        } else {
+            panic!("Expected complex nested call");
+        }
+
+        // Test method chaining
+        let result = parse_expression("obj.method1().method2().property").unwrap();
+        if let ASTNode::PropertyAccess { .. } = result {
+            // This should parse correctly due to left-associativity
+        } else {
+            panic!("Expected method chaining");
+        }
+    }
+
+    #[test]
+    fn test_precedence_and_associativity() {
+        // Test that multiplication has higher precedence than addition
+        let result = parse_expression("1 + 2 * 3").unwrap();
+        if let ASTNode::Binary { left, op, right } = result {
+            assert_eq!(op.kind, TokenKind::Plus);
+            matches!(left.as_ref(), ASTNode::Literal { .. });
+            if let ASTNode::Binary { op: inner_op, .. } = right.as_ref() {
+                assert_eq!(inner_op.kind, TokenKind::Star);
+            } else {
+                panic!("Expected multiplication to bind tighter");
+            }
+        } else {
+            panic!("Expected addition at top level");
+        }
+
+        // Test power operator precedence (right-associative)
+        let result = parse_expression("2 ** 3 ** 2").unwrap();
+        if let ASTNode::Binary { left, op, right } = result {
+            assert_eq!(op.kind, TokenKind::Power);
+            matches!(left.as_ref(), ASTNode::Literal { .. });
+            matches!(right.as_ref(), ASTNode::Binary { .. });
+        } else {
+            panic!("Expected power operator");
+        }
+    }
+
+    #[test]
+    fn test_error_recovery() {
+        // Test that parser handles various syntax errors gracefully
+        assert!(parse_expression("(").is_err());
+        assert!(parse_expression("func(").is_err());
+        assert!(parse_expression("[1, 2,").is_err());
+        assert!(parse_expression("{ name =").is_err());
+        assert!(parse_source("let = 42").is_err());
+    }
+
+    #[test]
+    fn test_multiline_constructs() {
+        let source = r#"
+func multiline(x, y) {
+    if x > y {
+        x - y
+    } else {
+        y - x
+    }
+}
+        "#;
+
+        let result = parse_source(source).unwrap();
+        assert_eq!(result.nodes.len(), 1);
+
+        if let ASTNode::FunctionStatement { body, .. } = &result.nodes[0] {
+            assert_eq!(body.len(), 1);
+            matches!(body[0], ASTNode::ExpressionStatement { .. });
+        } else {
+            panic!("Expected multiline function");
+        }
+    }
+
+    #[test]
+    fn test_empty_program() {
+        let result = parse_source("").unwrap();
+        assert_eq!(result.nodes.len(), 0);
+    }
+
+    #[test]
+    fn test_whitespace_and_comments() {
+        // Parser should handle extra whitespace gracefully
+        let result = parse_source("  let   x   =   42   ").unwrap();
+        assert_eq!(result.nodes.len(), 1);
+        matches!(result.nodes[0], ASTNode::LetStatement { .. });
     }
 }

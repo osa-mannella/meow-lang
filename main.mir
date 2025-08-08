@@ -1,9 +1,39 @@
-import "IO"
-
-IO.print("hello")
-let x = 2
-
-match x {
-2 -> IO.print("hi")
-3 -> IO.print("hello")
+enum Container {
+List { items },
+Single { item }
 }
+
+async func process_container(container) {
+match container {
+Container::List { items } -> {
+let processed = items |>
+fn(list) -> list <- [0] |>
+fn(list) -> list[0] + list[1]
+
+await save_result(processed)
+},
+Container::Single { item } -> {
+let doubled = item * 2
+await save_result(doubled)
+}
+}
+}
+
+func create_containers() {
+let list_container = Container::List {
+items = [1, 2, 3]
+}
+let single_container = Container::Single {
+item = 42
+}
+
+[list_container, single_container]
+}
+
+async func main() {
+let containers = create_containers()
+let first = containers[0]
+await process_container(first)
+}
+
+let! result = main()

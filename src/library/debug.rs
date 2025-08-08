@@ -245,7 +245,8 @@ pub fn print_bytecode_debug(bytecode: &BytecodeProgram) {
                         i += 1;
                     }
                 }
-                "add" | "sub" | "mul" | "div" | "equal" | "less" | "greater" | "pop" | "dup"
+                "add" | "sub" | "mul" | "div" | "equal" | "not_equal" | "less" | "greater" 
+                | "less_equal" | "greater_equal" | "and" | "or" | "pop" | "dup"
                 | "return" | "halt" | "match_fail" => {
                     println!(""); // No operands
                     i += 1;

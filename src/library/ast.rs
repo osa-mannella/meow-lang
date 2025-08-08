@@ -72,6 +72,10 @@ pub enum ASTNode {
         keys: Vec<Token>,
         values: Vec<ASTNode>,
     },
+    ArrayAppend {
+        base: Box<ASTNode>,
+        elements: Vec<ASTNode>,
+    },
     BoolLiteral {
         value: bool,
     },
@@ -109,7 +113,7 @@ pub enum ASTNode {
 #[derive(Debug, Clone)]
 pub struct MatchArm {
     pub patterns: Vec<ASTNode>,
-    pub expression: Box<ASTNode>,
+    pub expression: Vec<ASTNode>,
 }
 
 #[derive(Debug, Clone)]
@@ -249,7 +253,9 @@ impl ASTNode {
                     print!("  ");
                     arm.patterns.clone().into_iter().for_each(|p| p.print());
                     print!(" -> ");
-                    arm.expression.print();
+                    for expression in &arm.expression {
+                        expression.print();
+                    }
                     println!(",");
                 }
                 print!("}}");
@@ -322,6 +328,17 @@ impl ASTNode {
                     }
                 }
                 print!(" }}");
+            }
+            ArrayAppend { base, elements } => {
+                base.print();
+                print!(" <- [");
+                for (i, element) in elements.iter().enumerate() {
+                    element.print();
+                    if i < elements.len() - 1 {
+                        print!(", ");
+                    }
+                }
+                print!("]");
             }
             EnumStatement {
                 name,
