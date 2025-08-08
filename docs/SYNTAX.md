@@ -253,6 +253,16 @@ readFile("config.json")
     |> Result.unwrapOr(defaultDB)
 ```
 
+Pipeline operators should provide the result of the previous expression statement as the 0th arg of the right side function call. Give give a clear example:
+
+```mirrow
+func n(n1, n2) {
+    n1 + n2
+}
+
+1 |> n(2)
+```
+
 ### Error Propagation with `let!`
 
 The `let!` binding is used within functions that return a `Result` or `Maybe` type. It simplifies error handling by automatically propagating errors or absence, letting you write clear, linear code without manual matching.
