@@ -53,6 +53,17 @@ impl<'a> Parser<'a> {
         eprintln!("Parse error (line {}): {}", self.current.line, msg);
     }
 
+    fn handle_token_error(&mut self, token: &Token) {
+        match &token.value {
+            TokenValue::Error(msg) => {
+                self.error(&msg.clone());
+            }
+            _ => {
+                self.error(format!("{:?}", token.value).as_str());
+            }
+        }
+    }
+
     pub fn parse_expression(&mut self, min_precedence: u8) -> ParseResult {
         self.advance();
 
@@ -105,12 +116,12 @@ impl<'a> Parser<'a> {
 
     fn parse_interpolated_string(&mut self, initial_token: Token) -> ParseResult {
         let mut parts = Vec::new();
-        
+
         if let TokenValue::String(s) = &initial_token.value {
             // Parse the interpolated string content
             let mut chars = s.chars().peekable();
             let mut current_str = String::new();
-            
+
             while let Some(ch) = chars.next() {
                 if ch == '$' && chars.peek() == Some(&'{') {
                     // Add current string part if not empty
@@ -120,17 +131,17 @@ impl<'a> Parser<'a> {
                                 kind: TokenKind::String,
                                 value: TokenValue::String(current_str.clone()),
                                 line: initial_token.line,
-                            }
+                            },
                         });
                         current_str.clear();
                     }
-                    
+
                     chars.next(); // consume '{'
-                    
+
                     // Extract expression until '}'
                     let mut expr_str = String::new();
                     let mut brace_count = 1;
-                    
+
                     while let Some(ch) = chars.next() {
                         if ch == '{' {
                             brace_count += 1;
@@ -145,12 +156,12 @@ impl<'a> Parser<'a> {
                             expr_str.push(ch);
                         }
                     }
-                    
+
                     if brace_count != 0 {
                         self.error("Unclosed interpolation expression");
                         return None;
                     }
-                    
+
                     // Parse the expression string
                     if !expr_str.is_empty() {
                         let lexer = Lexer::new(&expr_str);
@@ -166,7 +177,7 @@ impl<'a> Parser<'a> {
                     current_str.push(ch);
                 }
             }
-            
+
             // Add remaining string part if not empty
             if !current_str.is_empty() {
                 parts.push(ASTNode::Literal {
@@ -174,11 +185,11 @@ impl<'a> Parser<'a> {
                         kind: TokenKind::String,
                         value: TokenValue::String(current_str),
                         line: initial_token.line,
-                    }
+                    },
                 });
             }
         }
-        
+
         Some(ASTNode::StringInterpolation { parts })
     }
 
@@ -316,11 +327,11 @@ impl<'a> Parser<'a> {
             if let Some(stmt) = self.parse_expression_statement() {
                 nodes.push(stmt);
             } else {
+                self.handle_token_error(&self.previous.clone());
                 break;
             }
         }
         if self.current.kind != TokenKind::RBrace {
-            println!("{:?}", self.current.kind);
             self.error("Expected '}' at end of block.");
             return None;
         }
@@ -1071,11 +1082,11 @@ impl<'a> Parser<'a> {
         );
 
         rules.insert(
-            Power,
+            Caret,
             ParseRule {
                 nud: None,
                 led: Some(Arc::new(|s, l, t| s.parse_binary(l, t))),
-                lbp: 50, // Power has high precedence
+                lbp: 50, // High precedence for power operator 
             },
         );
         rules.insert(
@@ -1680,9 +1691,9 @@ mod tests {
 
     #[test]
     fn test_power_operator() {
-        let result = parse_expression("2 ** 3").unwrap();
+        let result = parse_expression("2 ^ 3").unwrap();
         if let ASTNode::Binary { left, op, right } = result {
-            assert_eq!(op.kind, TokenKind::Power);
+            assert_eq!(op.kind, TokenKind::Caret);
             matches!(left.as_ref(), ASTNode::Literal { .. });
             matches!(right.as_ref(), ASTNode::Literal { .. });
         } else {
@@ -1768,9 +1779,9 @@ mod tests {
         }
 
         // Test power operator precedence (right-associative)
-        let result = parse_expression("2 ** 3 ** 2").unwrap();
+        let result = parse_expression("2 ^ 3 ^ 2").unwrap();
         if let ASTNode::Binary { left, op, right } = result {
-            assert_eq!(op.kind, TokenKind::Power);
+            assert_eq!(op.kind, TokenKind::Caret);
             matches!(left.as_ref(), ASTNode::Literal { .. });
             matches!(right.as_ref(), ASTNode::Binary { .. });
         } else {

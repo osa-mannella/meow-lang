@@ -35,7 +35,7 @@ mod integration_tests {
         // Binary operations
         assert!(full_compile_pipeline("let sum = 1 + 2").is_ok());
         assert!(full_compile_pipeline("let product = 3 * 4").is_ok());
-        assert!(full_compile_pipeline("let power = 2 ** 3").is_ok());
+        assert!(full_compile_pipeline("let power = 2 ^ 3").is_ok());
         assert!(full_compile_pipeline("let comparison = 5 > 3").is_ok());
         assert!(full_compile_pipeline("let equality = 1 == 1").is_ok());
         assert!(full_compile_pipeline("let logical = true && false").is_ok());
@@ -256,7 +256,7 @@ mod integration_tests {
             let booleans = [true, false]
             
             // Test all binary operators
-            let arithmetic = 1 + 2 - 3 * 4 / 5 ** 2
+            let arithmetic = 1 + 2 - 3 * 4 / 5 ^ 2
             let comparison = 1 < 2 && 3 > 2 || 4 <= 5 && 6 >= 5
             let equality = 1 == 1 && 2 != 3
             

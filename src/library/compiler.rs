@@ -79,6 +79,7 @@ impl BytecodeProgram {
         opcode_map.insert("sub".to_string(), 0x11);
         opcode_map.insert("mul".to_string(), 0x12);
         opcode_map.insert("div".to_string(), 0x13);
+        opcode_map.insert("power".to_string(), 0x1C);
         opcode_map.insert("equal".to_string(), 0x14);
         opcode_map.insert("not_equal".to_string(), 0x17);
         opcode_map.insert("less".to_string(), 0x15);
@@ -605,6 +606,7 @@ fn generate_instructions(
                 }
                 crate::library::lexer::TokenKind::And => bytecode.get_opcode("and"),
                 crate::library::lexer::TokenKind::Or => bytecode.get_opcode("or"),
+                crate::library::lexer::TokenKind::Caret => bytecode.get_opcode("power"),
                 _ => None,
             };
 

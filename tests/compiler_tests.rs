@@ -1,7 +1,7 @@
-use mirrow::library::compiler::{compile_program, BytecodeProgram, ConstantValue, EnumVariant};
+use mirrow::library::ast::ASTProgram;
+use mirrow::library::compiler::{BytecodeProgram, ConstantValue, EnumVariant, compile_program};
 use mirrow::library::lexer::Lexer;
 use mirrow::library::parser::Parser;
-use mirrow::library::ast::ASTProgram;
 
 fn compile_source(source: &str) -> Result<BytecodeProgram, String> {
     let lexer = Lexer::new(source);
@@ -106,6 +106,7 @@ fn test_binary_operations() {
         ("1 - 2", "sub"),
         ("1 * 2", "mul"),
         ("1 / 2", "div"),
+        ("1 ^ 2", "power"),
         ("1 == 2", "equal"),
         ("1 != 2", "not_equal"),
         ("1 < 2", "less"),
@@ -231,6 +232,34 @@ let circle = Shape::Circle { radius = 5.0 }
     // Should have create_enum opcode
     let create_enum = bytecode.get_opcode("create_enum");
     assert!(create_enum.is_some());
+}
+
+#[test]
+fn test_enum_complex_compilation() {
+    let source = r#"enum Shape {
+    Rectangle { length, width },
+    Square { side },
+    Circle { radius },
+}
+
+let circle = Shape::Circle { radius = 4 }
+
+match circle {
+    Shape::Circle { radius } -> {PI*r^2}
+}"#;
+
+    let bytecode = compile_source(source).unwrap();
+
+    // Should have enum definition
+    assert!(!bytecode.enums.is_empty());
+
+    // Should have create_enum opcode
+    let create_enum = bytecode.get_opcode("create_enum");
+    assert!(create_enum.is_some());
+
+    // Should have match instructions
+    let match_literal = bytecode.get_opcode("match_literal");
+    assert!(match_literal.is_some());
 }
 
 #[test]
@@ -433,6 +462,7 @@ fn test_opcode_map_completeness() {
         "sub",
         "mul",
         "div",
+        "power",
         "equal",
         "less",
         "greater",
@@ -716,3 +746,30 @@ fn test_struct_create_empty() {
     let struct_opcode = struct_create_opcode.unwrap();
     assert!(bytecode.instructions.contains(&struct_opcode));
 }
+
+#[test]
+fn test_power_operator_compilation() {
+    // Test ^ (caret) power operator
+    let bytecode = compile_expression("2 ^ 3").unwrap();
+    
+    let power_opcode = bytecode.get_opcode("power");
+    assert!(power_opcode.is_some());
+    
+    let opcode = power_opcode.unwrap();
+    assert!(bytecode.instructions.contains(&opcode));
+    
+    // Should contain the number constants
+    assert!(
+        bytecode
+            .constants
+            .iter()
+            .any(|c| { matches!(c.value, ConstantValue::Number(n) if n == 2.0) })
+    );
+    assert!(
+        bytecode
+            .constants
+            .iter()
+            .any(|c| { matches!(c.value, ConstantValue::Number(n) if n == 3.0) })
+    );
+}
+

@@ -281,7 +281,7 @@ pub fn print_bytecode_debug(bytecode: &BytecodeProgram) {
                         i += 1;
                     }
                 }
-                "add" | "sub" | "mul" | "div" | "equal" | "not_equal" | "less" | "greater" 
+                "add" | "sub" | "mul" | "div" | "power" | "equal" | "not_equal" | "less" | "greater" 
                 | "less_equal" | "greater_equal" | "and" | "or" | "pop" | "dup"
                 | "return" | "halt" | "match_fail" | "index_access" | "get_type" => {
                     println!(""); // No operands

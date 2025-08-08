@@ -1,3 +1,15 @@
-// todo:  add structs bytecode compiling, add match statement struct destructuring, pipe operator
+// todo: add match statement struct destructuring, pipe operator
 
-let b = {name = "Alice"}
+enum Shape {
+    Rectangle { length, width },
+    Square { side },
+    Circle { radius },
+}
+
+let circle = Shape::Circle { radius = 4 }
+
+match circle {
+    Shape::Circle { radius } -> {
+        PI * r ^ 2
+    }
+}
