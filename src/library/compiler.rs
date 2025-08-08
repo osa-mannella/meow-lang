@@ -112,6 +112,10 @@ impl BytecodeProgram {
         opcode_map.insert("match_fail".to_string(), 0x57);
 
         opcode_map.insert("string_concat".to_string(), 0x58);
+        opcode_map.insert("index_access".to_string(), 0x59);
+        opcode_map.insert("get_type".to_string(), 0x5A);
+        opcode_map.insert("create_array".to_string(), 0x5B);
+        opcode_map.insert("array_append".to_string(), 0x5C);
 
         opcode_map.insert("halt".to_string(), 0xFF);
 
@@ -523,10 +527,21 @@ fn collect_constants(bytecode: &mut BytecodeProgram, context: &CompileContext, n
             }
         }
 
+        ASTNode::IndexAccess { object, index } => {
+            collect_constants(bytecode, context, object);
+            collect_constants(bytecode, context, index);
+        }
+
+        ASTNode::ArrayAppend { base, elements } => {
+            collect_constants(bytecode, context, base);
+            for element in elements {
+                collect_constants(bytecode, context, element);
+            }
+        }
+
         ASTNode::Variable { .. }
         | ASTNode::ImportStatement { .. }
-        | ASTNode::EnumDeconstructPattern { .. }
-        | ASTNode::ArrayAppend { .. } => {}
+        | ASTNode::EnumDeconstructPattern { .. } => {}
     }
 }
 
@@ -848,6 +863,39 @@ fn generate_instructions(
                 if let Some(concat_opcode) = bytecode.get_opcode("string_concat") {
                     bytecode.emit_instruction_u8(concat_opcode, parts.len() as u8);
                 }
+            }
+        }
+
+        ASTNode::IndexAccess { object, index } => {
+            // Generate instructions to load the object and index onto the stack
+            generate_instructions(bytecode, context, object);
+            generate_instructions(bytecode, context, index);
+            
+            // Generate index access instruction with runtime type checking
+            if let Some(index_access_opcode) = bytecode.get_opcode("index_access") {
+                bytecode.emit_instruction(index_access_opcode);
+            }
+        }
+
+        ASTNode::ArrayAppend { base, elements } => {
+            // Generate instructions for array append operation
+            generate_instructions(bytecode, context, base);
+            for element in elements {
+                generate_instructions(bytecode, context, element);
+            }
+            if let Some(array_append_opcode) = bytecode.get_opcode("array_append") {
+                bytecode.emit_instruction_u8(array_append_opcode, elements.len() as u8);
+            }
+        }
+
+        ASTNode::ListLiteral { elements } => {
+            // Generate instructions to load each element onto the stack
+            for element in elements {
+                generate_instructions(bytecode, context, element);
+            }
+            // Generate array creation instruction with element count
+            if let Some(create_array_opcode) = bytecode.get_opcode("create_array") {
+                bytecode.emit_instruction_u8(create_array_opcode, elements.len() as u8);
             }
         }
 
@@ -1606,6 +1654,23 @@ let circle = Shape::Circle { radius = 5.0 }
                     .any(|c| { matches!(c.value, ConstantValue::Number(n) if n == i as f64) })
             );
         }
+    }
+
+    #[test]
+    fn test_index_access_compilation() {
+        let bytecode = compile_expression("arr[0]").unwrap();
+
+        // Should have index_access opcode
+        let index_access_opcode = bytecode.get_opcode("index_access");
+        assert!(index_access_opcode.is_some());
+
+        // Should contain the instructions for loading constant 0
+        assert!(
+            bytecode
+                .constants
+                .iter()
+                .any(|c| { matches!(c.value, ConstantValue::Number(n) if n == 0.0) })
+        );
     }
 
     #[test]

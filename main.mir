@@ -1,4 +1,3 @@
-// todo: add indexing to parser, add array transforming, add structs, add string interpolation to parser
+// todo:  add structs bytecode compiling, add match statement struct destructuring
 
-let id = 2
-let! userData = IO.readFile($"users/${id}.json")
+let b = $"b ${a}"

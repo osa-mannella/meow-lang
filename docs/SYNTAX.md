@@ -113,7 +113,7 @@ match x {
 ```mirrow
 let person = { name = "Alice", age = 25 }
 match person {
-    [name, age] -> IO.print("Name: " + name + ", Age: " + age)
+    { name, age } -> IO.print("Name: " + name + ", Age: " + age)
     _ -> IO.print("No match")
 }
 ```
@@ -127,6 +127,14 @@ match person {
 ```mirrow
 let numbers = [1, 2, 3]
 IO.print(numbers[0]) // 1
+```
+
+Lists can be natively transformed using a similar school of thought to structs.
+
+```mirrow
+let numbers = [1, 2, 3]
+let newNumbers = numbers <- [4, 5, 6]
+IO.print(newNumbers) // [1, 2, 3, 4, 5, 6]
 ```
 
 #### Built-in helpers:

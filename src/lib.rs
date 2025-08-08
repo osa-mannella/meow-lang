@@ -140,7 +140,7 @@ mod integration_tests {
         let numbers = [1, 2, 3, 4, 5]
         let result = numbers |>
             fn(arr) -> arr <- [6, 7, 8] |>
-            fn(arr) -> arr[0] + arr[1]
+            fn(arr) -> (arr[0] + arr[1])
         "#;
         assert!(full_compile_pipeline(pipeline_example).is_ok());
 
@@ -276,7 +276,7 @@ mod integration_tests {
             
             // Test pipeline
             let piped = numbers |> 
-                fn(arr) -> arr[0] |>
+                fn(arr) -> (arr[0]) |>
                 fn(x) -> x * 2
             
             // Test conditionals
@@ -391,8 +391,8 @@ mod integration_tests {
             match container {
                 Container::List { items } -> {
                     let processed = items |>
-                        fn(list) -> list <- [0] |>
-                        fn(list) -> list[0] + list[1]
+                        fn(list) -> (list <- [0]) |>
+                        fn(list) -> (list[0] + list[1])
                     
                     await save_result(processed)
                 },
@@ -411,12 +411,12 @@ mod integration_tests {
                 item = 42 
             }
             
-            [list_container, single_container]
+            ([list_container, single_container])
         }
         
         async func main() {
             let containers = create_containers()
-            let first = containers[0]
+            let first = (containers[0])
             await process_container(first)
         }
         

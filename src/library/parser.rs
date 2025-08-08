@@ -656,6 +656,16 @@ impl<'a> Parser<'a> {
         })
     }
 
+    fn parse_index_access(&mut self, object: ASTNode, _token: Token) -> ParseResult {
+        let index = self.parse_expression(0)?;
+        self.consume(TokenKind::RBracket, "Expected ']' after index expression");
+
+        Some(ASTNode::IndexAccess {
+            object: Box::new(object),
+            index: Box::new(index),
+        })
+    }
+
     fn parse_pattern(&mut self) -> Option<ASTNode> {
         // Enum destructor pattern
         if self.current.kind == TokenKind::Identifier {
@@ -961,8 +971,8 @@ impl<'a> Parser<'a> {
             LBracket,
             ParseRule {
                 nud: Some(Arc::new(|s, t| s.parse_list_literal(t))),
-                led: None,
-                lbp: 0,
+                led: Some(Arc::new(|s, left, token| s.parse_index_access(left, token))),
+                lbp: 40, // Same precedence as property access
             },
         );
         rules.insert(
@@ -1361,6 +1371,25 @@ mod tests {
             assert_eq!(elements.len(), 3);
         } else {
             panic!("Expected list literal with elements");
+        }
+    }
+
+    #[test]
+    fn test_index_access() {
+        let result = parse_expression("arr[0]").unwrap();
+        if let ASTNode::IndexAccess { object, index } = result {
+            matches!(object.as_ref(), ASTNode::Variable { .. });
+            matches!(index.as_ref(), ASTNode::Literal { .. });
+        } else {
+            panic!("Expected index access node");
+        }
+
+        let result = parse_expression("list[i + 1]").unwrap();
+        if let ASTNode::IndexAccess { object, index } = result {
+            matches!(object.as_ref(), ASTNode::Variable { .. });
+            matches!(index.as_ref(), ASTNode::Binary { .. });
+        } else {
+            panic!("Expected index access with binary expression");
         }
     }
 

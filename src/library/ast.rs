@@ -111,6 +111,10 @@ pub enum ASTNode {
     StringInterpolation {
         parts: Vec<ASTNode>,
     },
+    IndexAccess {
+        object: Box<ASTNode>,
+        index: Box<ASTNode>,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -417,6 +421,12 @@ impl ASTNode {
                     }
                 }
                 print!("\"");
+            }
+            IndexAccess { object, index } => {
+                object.print();
+                print!("[");
+                index.print();
+                print!("]");
             }
         }
     }
