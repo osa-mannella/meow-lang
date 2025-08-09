@@ -6,6 +6,7 @@ fn get_constant_string(bytecode: &BytecodeProgram, index: u16) -> String {
             ConstantValue::String(s) => s.clone(),
             ConstantValue::Number(n) => n.to_string(),
             ConstantValue::Boolean(b) => b.to_string(),
+            ConstantValue::FunctionRef(f) => format!("func_{}", f),
         }
     } else {
         format!("INVALID_CONST_{}", index)
@@ -32,6 +33,7 @@ pub fn print_bytecode_debug(bytecode: &BytecodeProgram) {
             ConstantValue::String(s) => println!("{}: String(\"{}\")", i, s),
             ConstantValue::Number(n) => println!("{}: Number({})", i, n),
             ConstantValue::Boolean(b) => println!("{}: Boolean({})", i, b),
+            ConstantValue::FunctionRef(f) => println!("{}: FunctionRef({})", i, f),
         }
     }
 
