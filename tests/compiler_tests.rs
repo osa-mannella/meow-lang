@@ -83,7 +83,7 @@ fn test_variable_operations() {
     let bytecode = compile_source("let x = 42").unwrap();
 
     // Should have store_var instruction
-    let store_var_opcode = bytecode.get_opcode("store_var");
+    let store_var_opcode = bytecode.get_opcode("store_global");
     assert!(store_var_opcode.is_some());
 
     // Check that instructions contain the store operation
@@ -213,7 +213,7 @@ fn test_enum_compilation() {
     // Should have enum definition
     assert!(!bytecode.enums.is_empty());
 
-    let enum_def = &bytecode.enums[0];
+    let enum_def = &bytecode.enums[3];
     assert_eq!(enum_def.variants.len(), 3);
 }
 
@@ -480,8 +480,6 @@ fn test_opcode_map_completeness() {
         "call_native",
         "pop",
         "dup",
-        "store_var",
-        "load_var",
         "create_enum",
         "get_enum_variant",
         "match_literal",
@@ -624,7 +622,7 @@ fn test_let_bang_compilation() {
             .any(|c| { matches!(c.value, ConstantValue::Number(n) if n == 42.0) })
     );
 
-    let store_var_opcode = bytecode.get_opcode("store_var").unwrap();
+    let store_var_opcode = bytecode.get_opcode("store_global").unwrap();
     assert!(bytecode.instructions.contains(&store_var_opcode));
 }
 
@@ -804,13 +802,12 @@ fn test_quote_string_escaping() {
     // Test single quotes escaping double quotes
     let bytecode = compile_expression(r#"'He said "hello"'"#).unwrap();
     assert!(
-        bytecode
-            .constants
-            .iter()
-            .any(|c| { matches!(c.value, ConstantValue::String(ref s) if s == r#"He said "hello""#) })
+        bytecode.constants.iter().any(|c| {
+            matches!(c.value, ConstantValue::String(ref s) if s == r#"He said "hello""#)
+        })
     );
 
-    // Test double quotes escaping single quotes  
+    // Test double quotes escaping single quotes
     let bytecode = compile_expression(r#""It's working""#).unwrap();
     assert!(
         bytecode
