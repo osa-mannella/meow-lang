@@ -1,6 +1,7 @@
 import "IO"
 
 func n(a, s) {
-a * s
+a / s
 }
+
 fn (x) -> x*x |> n

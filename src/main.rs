@@ -14,8 +14,6 @@ fn main() {
 
     match args.len() {
         1 => {
-            print_intro();
-            println!();
             print_help();
             exit(0);
         }
@@ -31,7 +29,6 @@ fn main() {
                     exit(0);
                 }
                 filename => {
-                    print_intro();
                     println!();
                     run_file(filename);
                 }
@@ -43,7 +40,6 @@ fn main() {
 
             match flag.as_str() {
                 "--debug" => {
-                    print_intro();
                     println!();
                     println!("🔍 Debug mode enabled");
                     println!();
