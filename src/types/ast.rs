@@ -1,0 +1,35 @@
+#[derive(Debug, Clone)]
+pub enum Expr {
+    Identifier(String),
+    Number(f64),
+    String(String),
+    Binary { left: Box<Expr>, op: BinaryOp, right: Box<Expr> },
+    Call { func: Box<Expr>, args: Vec<Expr> },
+    Pipeline { left: Box<Expr>, right: Box<Expr> },
+}
+
+#[derive(Debug, Clone)]
+pub enum BinaryOp {
+    Add,
+    Sub,
+    Mul,
+    Div,
+    Eq,
+    Ne,
+    Lt,
+    Gt,
+    Le,
+    Ge,
+}
+
+#[derive(Debug, Clone)]
+pub enum Stmt {
+    Let { name: String, value: Expr },
+    Func { name: String, params: Vec<String>, body: Vec<Stmt> },
+    Expr(Expr),
+}
+
+#[derive(Debug, Clone)]
+pub struct Program {
+    pub statements: Vec<Stmt>,
+}
