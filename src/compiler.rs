@@ -40,8 +40,6 @@ pub struct Compiler {
     variables: Vec<HashMap<String, usize>>,
     instructions: Vec<Instruction>,
     current_function: Option<String>,
-    current_function_params: HashMap<String, usize>, // Function-local parameter mapping
-    current_param_count: usize, // Track number of parameters in current function
     depth: usize,
 }
 
@@ -61,35 +59,33 @@ impl Compiler {
             depth: 0,
             instructions: Vec::new(),
             current_function: None,
-            current_function_params: HashMap::new(),
-            current_param_count: 0,
         }
     }
 
-    fn insert_variable(&mut self, name: &str, index: usize) {
-        if self.variables.len() <= self.depth {
-            for _ in self.variables.len()..=self.depth {
-                self.variables.push(HashMap::new());
-            }
-            // Add HashMaps to match the appropriate depth to ensure inbound indexing
+    fn insert_variable(&mut self, name: &str) -> usize {
+        while self.variables.len() <= self.depth {
+            self.variables.push(HashMap::new());
         }
-        self.variables[self.depth].insert(name.to_string(), index);
+
+        let current_scope = &mut self.variables[self.depth];
+        let local_index = current_scope.len(); // Next available index in this scope
+        current_scope.insert(name.to_string(), local_index);
+
+        local_index
     }
 
     fn get_variable(&self, name: &str) -> Option<(usize, usize)> {
-        // Only search scopes up to current depth (inclusive)
-        let max_scope_count = (self.depth + 1).min(self.variables.len());
         println!("{:?}", self.variables);
-        // Search from current depth backwards to find the variable
-        for (depth_offset, scope) in self.variables[..max_scope_count].iter().rev().enumerate() {
-            println!("{name}");
+        let mut result = None;
+        for (depth, scope) in self.variables.iter().enumerate() {
+            if depth > self.depth {
+                break;
+            }
             if let Some(index) = scope.get(name) {
-                let actual_depth = max_scope_count - 1 - depth_offset;
-
-                return Some((*index, actual_depth));
+                result = Some((*index, depth));
             }
         }
-        None
+        result
     }
 
     pub fn compile(&mut self, program: &Program) -> ByteCode {
@@ -187,7 +183,7 @@ impl Compiler {
                 // Jump over the function definition in main execution flow
                 let jump_over_function = self.instructions.len();
                 self.instructions.push(Instruction::Jump(0)); // Placeholder, will be patched
-
+                self.depth += 1;
                 if let Some(function_index) = self.functions.get(name).cloned() {
                     if let Some(Value::Function { params, .. }) =
                         self.function_table.get_mut(function_index)
@@ -207,34 +203,24 @@ impl Compiler {
                 }
 
                 let old_function = self.current_function.clone();
-                let old_params = self.current_function_params.clone();
-                let old_variables = self.variables.clone();
-                let old_param_count = self.current_param_count;
 
                 self.current_function = Some(name.clone());
-                self.current_param_count = params.len();
 
                 // Set up function parameter mapping with local indices
-                self.current_function_params.clear();
-                self.variables.clear(); // Clear variables for function scope
+                //self.variables.clear(); // Clear variables for function scope
 
                 for (param_index, param_name) in params.iter().enumerate() {
-                    self.current_function_params
-                        .insert(param_name.clone(), param_index);
+                    self.get_or_create_variable_index(param_name);
                 }
 
                 for (i, body_stmt) in body.iter().enumerate() {
                     let last = i == body.len() - 1;
-                    self.depth += 1;
                     self.compile_statement(body_stmt, last);
-                    self.depth -= 1;
                 }
+                self.depth -= 1;
 
                 self.instructions.push(Instruction::Return);
                 self.current_function = old_function;
-                self.current_function_params = old_params;
-                self.variables = old_variables;
-                self.current_param_count = old_param_count;
 
                 // Patch the jump to skip over the function
                 let after_function = self.instructions.len();
@@ -334,34 +320,18 @@ impl Compiler {
     }
 
     fn get_or_create_variable_index(&mut self, name: &str) -> (usize, usize) {
-        // First check if this is a function parameter in the current function
-        if self.current_function.is_some() {
-            if let Some(param_index) = self.current_function_params.get(name) {
-                return (*param_index, self.depth);
-            }
-        }
         // For local variables in functions, start indexing after parameters
-        if self.current_function.is_some() {
-            // If it exists we just return the de-referenced index
-            if let Some((index, depth)) = self.get_variable(name) {
-                (index, depth)
-            } else {
-                // Local variables start from param_count to avoid conflicts
-                // Here we create the variable
-
-                let index = self.current_param_count + self.variables.len();
-                self.insert_variable(name, index);
-                (index, self.depth)
-            }
+        // If it exists we just return the de-referenced index
+        if let Some((index, depth)) = self.get_variable(name) {
+            (index, depth)
         } else {
-            // Global scope - use standard indexing
-            if let Some((index, depth)) = self.get_variable(name) {
-                (index, depth)
-            } else {
-                let index = self.variables.len();
-                self.insert_variable(name, index);
-                (index, 0) // Global scope is always at depth 0
+            // Local variables start from param_count to avoid conflicts
+            // Here we create the variable
+            if name == "a" {
+                println!("HERE");
             }
+            let index = self.insert_variable(name);
+            (index, self.depth)
         }
     }
 }
