@@ -67,7 +67,6 @@ impl Compiler {
     }
 
     fn insert_variable(&mut self, name: &str, index: usize) {
-        println!("{} {}", self.variables.len(), self.depth);
         if self.variables.len() <= self.depth {
             for _ in self.variables.len()..=self.depth {
                 self.variables.push(HashMap::new());
@@ -77,10 +76,17 @@ impl Compiler {
         self.variables[self.depth].insert(name.to_string(), index);
     }
 
-    fn get_variable(&self, name: &str) -> Option<usize> {
-        for scope in self.variables.iter().rev() {
+    fn get_variable(&self, name: &str) -> Option<(usize, usize)> {
+        // Only search scopes up to current depth (inclusive)
+        let max_scope_count = (self.depth + 1).min(self.variables.len());
+        println!("{:?}", self.variables);
+        // Search from current depth backwards to find the variable
+        for (depth_offset, scope) in self.variables[..max_scope_count].iter().rev().enumerate() {
+            println!("{name}");
             if let Some(index) = scope.get(name) {
-                return Some(*index);
+                let actual_depth = max_scope_count - 1 - depth_offset;
+
+                return Some((*index, actual_depth));
             }
         }
         None
@@ -172,7 +178,7 @@ impl Compiler {
         match stmt {
             Stmt::Let { name, value } => {
                 self.compile_expression(value);
-                let var_index = self.get_or_create_variable_index(name);
+                let (var_index, _) = self.get_or_create_variable_index(name);
 
                 self.instructions
                     .push(Instruction::StoreVar(self.depth, var_index));
@@ -254,9 +260,9 @@ impl Compiler {
                 self.instructions.push(Instruction::LoadConst(const_index));
             }
             Expr::Identifier(name) => {
-                let var_index = self.get_or_create_variable_index(name);
+                let (var_index, fetch_depth) = self.get_or_create_variable_index(name);
                 self.instructions
-                    .push(Instruction::LoadVar(self.depth, var_index));
+                    .push(Instruction::LoadVar(fetch_depth, var_index));
             }
             Expr::Binary { left, op, right } => {
                 self.compile_expression(left);
@@ -327,34 +333,34 @@ impl Compiler {
             .unwrap_or(0)
     }
 
-    fn get_or_create_variable_index(&mut self, name: &str) -> usize {
+    fn get_or_create_variable_index(&mut self, name: &str) -> (usize, usize) {
         // First check if this is a function parameter in the current function
         if self.current_function.is_some() {
             if let Some(param_index) = self.current_function_params.get(name) {
-                return *param_index;
+                return (*param_index, self.depth);
             }
         }
         // For local variables in functions, start indexing after parameters
         if self.current_function.is_some() {
             // If it exists we just return the de-referenced index
-            if let Some(index) = self.get_variable(name) {
-                index
+            if let Some((index, depth)) = self.get_variable(name) {
+                (index, depth)
             } else {
                 // Local variables start from param_count to avoid conflicts
                 // Here we create the variable
 
                 let index = self.current_param_count + self.variables.len();
                 self.insert_variable(name, index);
-                index
+                (index, self.depth)
             }
         } else {
             // Global scope - use standard indexing
-            if let Some(index) = self.get_variable(name) {
-                index
+            if let Some((index, depth)) = self.get_variable(name) {
+                (index, depth)
             } else {
                 let index = self.variables.len();
                 self.insert_variable(name, index);
-                index
+                (index, 0) // Global scope is always at depth 0
             }
         }
     }

@@ -1,8 +1,6 @@
 func n(a, b) {
-    let z = 4
     func v(c, d) {
-        let x = 4
-        c / d
+        a / d
     }
     v(a, b)
     v(2, 4)
