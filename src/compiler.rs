@@ -22,11 +22,12 @@ pub enum Instruction {
     JumpIfFalse(usize) = 0x21,
     JumpIfTrue(usize) = 0x22,
     Pop = 0x30,
-    Dup = 0x31,
-    Halt = 0x32,
+    Push(Value) = 0x31,
+    Dup = 0x32,
+    Halt = 0x33,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Value {
     Number(f64),
     String(String),
@@ -327,6 +328,7 @@ impl Compiler {
 impl fmt::Display for Instruction {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Instruction::Push(value) => write!(f, "PUSH {}", value),
             Instruction::StoreVar(scope, idx) => write!(f, "STORE_VAR {} {}", scope, idx),
             Instruction::LoadVar(scope, idx) => write!(f, "LOAD_VAR {} {}", scope, idx),
             Instruction::LoadArg(idx) => write!(f, "LOAD_ARG {}", idx),
