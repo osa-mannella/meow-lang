@@ -76,7 +76,7 @@ impl VirtualMachine {
                 self.stack.push(value);
             }
 
-            Instruction::StoreVar(depth, var_index) => {
+            Instruction::StoreVar(_, var_index) => {
                 let value = self.stack.pop().ok_or("Stack underflow")?;
 
                 let current_frame = self
@@ -241,6 +241,36 @@ impl VirtualMachine {
         }
 
         Err(format!("Variable with index {} not found", var_index))
+    }
+
+    fn heap_push(&mut self, value: Value) -> Option<Value> {
+        const MAX_STRING_LENGTH: usize = 1024;
+        let heap_index = match &value {
+            Value::String(s) if s.len() > MAX_STRING_LENGTH => {
+                let heap_obj = HeapObject::String(s.clone());
+                self.heap.push(heap_obj);
+                Some(self.heap.len() - 1)
+            }
+            // Future cases will go here
+            _ => None,
+        };
+
+        heap_index.map(|index| Value::HeapPointer(index))
+    }
+
+    fn set_variable(&mut self, var_index: usize, value: Value) -> Result<(), String> {
+        let final_value = match self.heap_push(value.clone()) {
+            Some(heap_pointer) => heap_pointer,
+            None => value,
+        };
+
+        let current_frame = self
+            .stack_frames
+            .last_mut()
+            .ok_or("No stack frame available")?;
+
+        current_frame.set_variable(var_index, final_value);
+        Ok(())
     }
 
     fn pop_number(&mut self) -> Result<f64, String> {
