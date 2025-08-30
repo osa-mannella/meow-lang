@@ -5,39 +5,28 @@
 [![Rust](https://img.shields.io/badge/Rust-000000?style=for-the-badge&logo=rust&logoColor=white)](https://rust-lang.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](https://opensource.org/licenses/MIT)
 
-## ✨ Features
+## ✨ Currently Implemented Features
 
-- **🚀 Functional First**: Immutable by default, with powerful pattern matching and automatic currying
-- **⚡ High Performance**: Stack-based bytecode VM with efficient memory management and heap optimization
-- **🔒 Memory Safe**: Built in Rust with automatic garbage collection and zero-cost abstractions
-- **📦 Module System**: Clean import system with explicit effect tracking for side effects
-- **🔄 Async Ready**: Built-in async/await with FramePackage-based task scheduling
-- **🎯 Simple Syntax**: Clean, readable syntax that prioritizes developer experience
+- **🚀 Functional Core**: Basic function definitions with automatic currying
+- **⚡ High Performance**: Stack-based bytecode VM with efficient memory management
+- **🔒 Memory Safe**: Built in Rust with heap management and garbage collection support
+- **📦 Simple Scoping**: 2D stack frame system for efficient variable scoping
+- **🎯 Clean Syntax**: Immutable variables and basic expressions
 
 ## 🚀 Quick Start
 
 ```n
-// Hello World
-func greet(name) {
-    "Hello " + name
+// Basic variable declaration
+let x = 5
+let y = 10
+
+// Simple function
+func add(a, b) {
+    a + b
 }
 
-IO.print(greet("World"))
-
-// Functional programming
-let numbers = [1, 2, 3, 4, 5]
-let doubled = map(numbers, fn(x) => x * 2)
-let sum = reduce(doubled, fn(acc, x) => acc + x, 0)
-
-IO.print(sum) // 30
-
-// Pattern matching
-let status = 200
-match status {
-    200 -> IO.print("Success!")
-    404 -> IO.print("Not Found")
-    _ -> IO.print("Unknown")
-}
+// Function calls
+let result = add(x, y)
 ```
 
 ## 🏗️ Architecture
@@ -47,42 +36,47 @@ n is built with a modern, efficient architecture:
 - **Two-pass Compiler**: Collects functions and constants, then generates optimized bytecode
 - **Stack-based VM**: Fast execution with 2D stack frame system for efficient scoping
 - **Heap Management**: Automatic placement of large objects with garbage collection
-- **Native Interop**: Write low-level modules in Rust for maximum performance
+- **Bytecode Optimization**: O(1) variable access through compile-time indexing
 
 ## 📚 Language Features
 
-### Immutable by Default
+### Basic Syntax
 
 ```n
-let user = { name = "Alice", age = 30 }
-let updatedUser = user <- { age = 31 }  // Creates new struct
-```
+// Variables (immutable)
+let counter = 0
+let message = "Hello"
 
-### Automatic Currying
-
-```n
-func add3(a, b, c) { a + b + c }
-let add1 = add3(1)           // Partially applied
-let add1and2 = add1(2)       // Further applied
-IO.print(add1and2(3))        // 6
-```
-
-### Powerful Pattern Matching
-
-```n
-let person = { name = "Bob", age = 25 }
-match person {
-    { name, age } -> IO.print($"Name: {name}, Age: {age}")
-    _ -> IO.print("Unknown person")
+// Functions
+func greet(name) {
+    "Hello " + name
 }
+
+// Basic arithmetic
+let sum = 5 + 3
+let product = 4 * 6
 ```
 
-### Effect Tracking
+### Function Calls
 
 ```n
-import effect "IO"    // Explicit side effect declaration
-import "math"         // Pure functions only
+// Direct function calls
+let result = add(5, 3)
+
+// Function composition
+let doubled = multiply(2, 5)
 ```
+
+## 🔮 Planned Features
+
+The following features are planned but not yet implemented:
+
+- **Pattern Matching**: Advanced structural pattern matching
+- **Module System**: File-based imports with effect tracking
+- **Async Support**: Built-in async/await with FramePackage scheduling
+- **Collections**: Lists, maps, and functional collection operations
+- **String Interpolation**: Template literal support
+- **Structs**: Lightweight dynamic objects
 
 ## 🛠️ Development Status
 
@@ -92,14 +86,15 @@ n is currently in active development. The core language features are implemented
 - ✅ Bytecode Compiler
 - ✅ Stack-based VM
 - ✅ Basic syntax and semantics
-- 🔄 Heap management and GC
+- ✅ Heap management foundation
+- 🔄 Advanced language features
 - 🔄 Module system
 - 🔄 Async/await support
 
 ## 📖 Documentation
 
-- [Language Specification](docs/SPEC.MD) - Complete language reference
-- [Syntax Guide](docs/SYNTAX.md) - Language syntax and examples
+- [Language Specification](docs/SPEC.MD) - Complete language reference and implementation details
+- [Syntax Guide](docs/SYNTAX.md) - Planned language features and design goals
 - [Bytecode Reference](docs/BYTECODE.md) - VM implementation details
 
 ## 🚧 Contributing
