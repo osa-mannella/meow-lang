@@ -332,10 +332,10 @@ enum Shape {
     Circle { radius },
 }
 
-let circle = Shape::Circle { radius = 4 }
+let circle = Shape >> Circle { radius = 4 }
 
 match circle {
-    Shape::Circle { radius } -> PI*r^2
+    Shape >> Circle { radius } -> PI*r^2
 }
 ```
 
