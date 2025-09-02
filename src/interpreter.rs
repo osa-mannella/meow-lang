@@ -2,7 +2,7 @@ use crate::compiler::{ByteCode, HeapObject, Instruction, Value};
 
 #[derive(Debug, Clone)]
 pub struct StackFrame {
-    variables: Vec<Value>, // Store actual Values directly
+    variables: Vec<Value>,
 }
 
 impl StackFrame {
@@ -14,33 +14,32 @@ impl StackFrame {
 
     pub fn set_variable(&mut self, index: usize, value: Value) {
         while index >= self.variables.len() {
-            self.variables.push(Value::Number(0.0)); // You'll need to add Null to Value enum
+            self.variables.push(Value::Number(0.0));
         }
         self.variables[index] = value;
     }
 
     pub fn get_variable(&self, index: usize) -> Option<&Value> {
-        // Return reference to Value
         self.variables.get(index)
     }
 }
 
 pub struct VirtualMachine {
     stack: Vec<Value>,
-    stack_frames: Vec<StackFrame>, // 2D array system: [global_frame, local_frames...]
+    stack_frames: Vec<StackFrame>,
     return_addresses: Vec<usize>,
-    pc: usize, // Program counter
+    pc: usize,
     constants: Vec<Value>,
     functions: Vec<Value>,
     instructions: Vec<Instruction>,
-    heap: Vec<HeapObject>, // Runtime variable storage
+    heap: Vec<HeapObject>,
 }
 
 impl VirtualMachine {
     pub fn new(bytecode: ByteCode) -> Self {
         let vm = Self {
             stack: Vec::new(),
-            stack_frames: vec![StackFrame::new()], // Start with global frame
+            stack_frames: vec![StackFrame::new()],
             return_addresses: Vec::new(),
             pc: 0,
             constants: bytecode.constants,
@@ -88,14 +87,12 @@ impl VirtualMachine {
             }
 
             Instruction::LoadArg(arg_count) => {
-                // Pop arguments from stack
                 let mut args = Vec::new();
                 for _ in 0..*arg_count {
                     args.push(self.stack.pop().ok_or("Not enough arguments")?);
                 }
-                // Just store the VALUES directly in the frame!
                 for (param_index, arg_value) in args.iter().rev().enumerate() {
-                    self.set_variable(param_index, arg_value.clone())?; // Store VALUE, not index!
+                    self.set_variable(param_index, arg_value.clone())?;
                 }
             }
 
@@ -176,14 +173,11 @@ impl VirtualMachine {
                     .ok_or("Invalid function index")?;
 
                 if let Value::Function { offset, .. } = function {
-                    // Push return address
                     self.return_addresses.push(self.pc + 1);
 
-                    // Create new stack frame for function
                     let new_frame = StackFrame::new();
                     self.stack_frames.push(new_frame);
 
-                    // Jump to function (LOAD_ARG will handle parameter binding)
                     self.pc = *offset;
                     return Ok(());
                 } else {
@@ -192,12 +186,10 @@ impl VirtualMachine {
             }
 
             Instruction::Return => {
-                // Pop current stack frame
                 if self.stack_frames.len() > 1 {
                     self.stack_frames.pop();
                 }
 
-                // Jump back to return address
                 if let Some(return_addr) = self.return_addresses.pop() {
                     self.pc = return_addr;
                     return Ok(());
@@ -225,7 +217,6 @@ impl VirtualMachine {
     }
 
     fn resolve_variable(&self, var_index: usize) -> Result<Value, String> {
-        // Iterate backwards through stack frames (current scope to global)
         for frame in self.stack_frames.iter().rev() {
             if let Some(value) = frame.get_variable(var_index) {
                 return Ok(value.clone());
@@ -243,7 +234,6 @@ impl VirtualMachine {
                 self.heap.push(heap_obj);
                 Some(self.heap.len() - 1)
             }
-            // Future cases will go here
             _ => None,
         };
 
