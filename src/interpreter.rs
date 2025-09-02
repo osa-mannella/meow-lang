@@ -79,14 +79,10 @@ impl VirtualMachine {
             Instruction::StoreVar(_, var_index) => {
                 let value = self.stack.pop().ok_or("Stack underflow")?;
 
-                let current_frame = self
-                    .stack_frames
-                    .last_mut()
-                    .ok_or("No stack frame available")?;
-                current_frame.set_variable(*var_index, value);
+                self.set_variable(*var_index, value)?;
             }
 
-            Instruction::LoadVar(depth, var_index) => {
+            Instruction::LoadVar(_, var_index) => {
                 let value = self.resolve_variable(*var_index)?;
                 self.stack.push(value);
             }
@@ -97,13 +93,9 @@ impl VirtualMachine {
                 for _ in 0..*arg_count {
                     args.push(self.stack.pop().ok_or("Not enough arguments")?);
                 }
-
-                // Get current frame
-                let current_frame = self.stack_frames.last_mut().ok_or("No frame")?;
-
                 // Just store the VALUES directly in the frame!
                 for (param_index, arg_value) in args.iter().rev().enumerate() {
-                    current_frame.set_variable(param_index, arg_value.clone()); // Store VALUE, not index!
+                    self.set_variable(param_index, arg_value.clone())?; // Store VALUE, not index!
                 }
             }
 
