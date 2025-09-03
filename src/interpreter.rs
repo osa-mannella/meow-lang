@@ -2,6 +2,7 @@ use crate::compiler::{ByteCode, HeapObject, Instruction, Value};
 use std::collections::VecDeque;
 
 const GC_CHECK_INTERVAL: usize = 12;
+const GC_THRESHOLD: usize = 4000;
 
 #[derive(Debug, Clone)]
 pub struct StackFrame {
@@ -126,7 +127,7 @@ impl VirtualMachine {
             println!("PC: {}, GC_CHECK_INTERVAL: {}", self.pc, GC_CHECK_INTERVAL);
             if (self.pc + 1) % GC_CHECK_INTERVAL == 0 {
                 let heap_score = self.heap_score();
-                if heap_score > 1000 {
+                if heap_score >= GC_THRESHOLD {
                     self.gc();
                 }
             }
