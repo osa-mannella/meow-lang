@@ -1,4 +1,7 @@
 use crate::compiler::{ByteCode, HeapObject, Instruction, Value};
+use std::collections::VecDeque;
+
+const GC_CHECK_INTERVAL: usize = 12;
 
 #[derive(Debug, Clone)]
 pub struct StackFrame {
@@ -33,6 +36,7 @@ pub struct VirtualMachine {
     functions: Vec<Value>,
     instructions: Vec<Instruction>,
     heap: Vec<HeapObject>,
+    last_heap_score: VecDeque<usize>,
 }
 
 impl VirtualMachine {
@@ -46,12 +50,85 @@ impl VirtualMachine {
             functions: bytecode.functions,
             instructions: bytecode.instructions,
             heap: Vec::new(),
+            last_heap_score: VecDeque::new(),
         };
         vm
     }
 
+    fn gc(&mut self) {
+        // Mark phase: Find all live objects by tracing from stack variables
+        let mut marked = vec![false; self.heap.len()];
+
+        for frame in &self.stack_frames {
+            for value in &frame.variables {
+                if let Value::HeapPointer(idx) = value {
+                    if *idx < marked.len() {
+                        marked[*idx] = true;
+                    }
+                }
+            }
+        }
+
+        // Sweep phase: Build new compacted heap and create index mapping
+        let mut new_heap = Vec::with_capacity(self.heap.len());
+        let mut remap = vec![None; self.heap.len()];
+        for (i, (obj, is_marked)) in self.heap.iter().zip(marked.iter()).enumerate() {
+            if *is_marked {
+                remap[i] = Some(new_heap.len());
+                new_heap.push(obj.clone());
+            }
+        }
+
+        // Update phase: Fix all heap pointer references to use new indices
+        for frame in &mut self.stack_frames {
+            for value in &mut frame.variables {
+                if let Value::HeapPointer(idx) = value {
+                    if *idx < remap.len() {
+                        if let Some(new_idx) = remap[*idx] {
+                            *value = Value::HeapPointer(new_idx);
+                        }
+                    }
+                }
+            }
+        }
+
+        // Replace old heap with compacted heap
+        self.heap = new_heap;
+    }
+
+    fn heap_score(&mut self) -> usize {
+        let mut heap_score: usize = 0;
+        for obj in &self.heap {
+            match obj {
+                HeapObject::Array(arr) => {
+                    heap_score += 16 + arr.len() * 8;
+                }
+                HeapObject::String(s) => {
+                    heap_score += 24 + s.len();
+                }
+                HeapObject::Object(map) => {
+                    heap_score += 32 + map.len() * 16;
+                }
+                _ => {
+                    heap_score += 32;
+                }
+            }
+        }
+        self.last_heap_score.push_back(heap_score);
+        if self.last_heap_score.len() > 10 {
+            self.last_heap_score.pop_front();
+        }
+        heap_score
+    }
+
     pub fn run(&mut self) -> Result<(), String> {
-        while self.pc < self.instructions.len() {
+        while (self.pc + 1) < self.instructions.len() {
+            if self.pc % GC_CHECK_INTERVAL == 0 {
+                let heap_score = self.heap_score();
+                if heap_score > 1000 {
+                    self.gc();
+                }
+            }
             match &self.instructions[self.pc] {
                 Instruction::Halt => break,
                 _ => self.execute_instruction()?,
