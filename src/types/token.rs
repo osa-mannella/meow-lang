@@ -4,6 +4,8 @@ pub enum Token {
     Identifier(String),
     String(String),
     Number(f64),
+    True,
+    False,
 
     // Keywords
     Let,

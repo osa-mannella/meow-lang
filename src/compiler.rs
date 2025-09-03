@@ -31,6 +31,7 @@ pub enum Instruction {
 pub enum Value {
     Number(f64),
     String(String),
+    Boolean(bool),
     Function { params: Vec<String>, offset: usize },
     HeapPointer(usize),
 }
@@ -56,6 +57,7 @@ pub struct Compiler {
     in_new_function: bool,
 }
 
+#[derive(Debug, Clone, PartialEq)]
 pub struct ByteCode {
     pub constants: Vec<Value>,
     pub functions: Vec<Value>,
@@ -144,6 +146,14 @@ impl Compiler {
 
     fn collect_constants_from_expr(&mut self, expr: &Expr) {
         match expr {
+            Expr::Boolean(b) => {
+                let value = Value::Boolean(*b);
+                if !self.constants.iter().any(
+                    |c| matches!((c, &value), (Value::Boolean(a), Value::Boolean(b)) if a == b),
+                ) {
+                    self.constants.push(value);
+                }
+            }
             Expr::Number(n) => {
                 let value = Value::Number(*n);
                 if !self
@@ -176,6 +186,9 @@ impl Compiler {
             }
             Expr::Pipeline { left, right } => {
                 self.collect_constants_from_expr(left);
+                self.collect_constants_from_expr(right);
+            }
+            Expr::Unary { right, .. } => {
                 self.collect_constants_from_expr(right);
             }
             Expr::Identifier(_) => {}
@@ -252,6 +265,10 @@ impl Compiler {
 
     fn compile_expression(&mut self, expr: &Expr) {
         match expr {
+            Expr::Boolean(b) => {
+                let const_index = self.get_constant_index(&Value::Boolean(*b));
+                self.instructions.push(Instruction::LoadConst(const_index));
+            }
             Expr::Number(n) => {
                 let const_index = self.get_constant_index(&Value::Number(*n));
                 self.instructions.push(Instruction::LoadConst(const_index));
@@ -320,6 +337,21 @@ impl Compiler {
                     }
                 }
             }
+            Expr::Unary { op, right } => {
+                match op {
+                    UnaryOp::Neg => {
+                        self.instructions
+                            .push(Instruction::Push(Value::Number(0.0)));
+                        self.compile_expression(right);
+                        self.instructions.push(Instruction::Sub);
+                    }
+                    UnaryOp::Not => {
+                        // For now, just compile the right operand
+                        // TODO: Implement logical not when we have boolean operations
+                        self.compile_expression(right);
+                    }
+                }
+            }
         }
     }
 
@@ -329,6 +361,7 @@ impl Compiler {
             .position(|c| match (c, value) {
                 (Value::Number(a), Value::Number(b)) => a == b,
                 (Value::String(a), Value::String(b)) => a == b,
+                (Value::Boolean(a), Value::Boolean(b)) => a == b,
                 _ => false,
             })
             .unwrap_or(0)
@@ -376,6 +409,7 @@ impl fmt::Display for Value {
         match self {
             Value::Number(n) => write!(f, "{}", n),
             Value::String(s) => write!(f, "\"{}\"", s),
+            Value::Boolean(b) => write!(f, "{}", b),
             Value::Function { params, offset } => {
                 write!(f, "fn({}) @{}", params.join(", "), offset)
             }

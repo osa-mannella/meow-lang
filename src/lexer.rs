@@ -162,6 +162,8 @@ impl Lexer {
                         "return" => Token::Return,
                         "async" => Token::Async,
                         "await" => Token::Await,
+                        "true" => Token::True,
+                        "false" => Token::False,
                         _ => Token::Identifier(identifier),
                     };
                 }

@@ -73,7 +73,7 @@ impl Parser {
 
     fn expression(&mut self, min_prec: u8) -> Expr {
         let mut left = self.nud();
-        while self.precedence() >= min_prec {
+        while self.precedence(false) >= min_prec {
             left = self.led(left);
         }
         left
@@ -89,7 +89,18 @@ impl Parser {
                 self.expect(Token::RightParen);
                 expr
             }
-            _ => panic!("Unexpected token in nud"),
+            Token::Minus => {
+                let right = self.expression(5);
+                Expr::Unary {
+                    op: UnaryOp::Neg,
+                    right: Box::new(right),
+                }
+            }
+            Token::True => Expr::Boolean(true),
+            Token::False => Expr::Boolean(false),
+            t => {
+                panic!("Unexpected token in nud: {:?}", t);
+            }
         }
     }
 
@@ -107,7 +118,7 @@ impl Parser {
             | Token::GreaterEqual => {
                 let op = self.binary_op();
                 self.advance();
-                let right = self.expression(self.precedence() + 1);
+                let right = self.expression(self.precedence(true) + 1);
                 Expr::Binary {
                     left: Box::new(left),
                     op,
@@ -131,7 +142,7 @@ impl Parser {
             }
             Token::Pipeline => {
                 self.advance();
-                let right = self.expression(self.precedence() + 1);
+                let right = self.expression(self.precedence(true) + 1);
                 Expr::Pipeline {
                     left: Box::new(left),
                     right: Box::new(right),
@@ -157,7 +168,7 @@ impl Parser {
         }
     }
 
-    fn precedence(&self) -> u8 {
+    fn precedence(&self, right_parse: bool) -> u8 {
         match self.current() {
             Token::Pipeline => 1,
             Token::Equal
@@ -169,6 +180,17 @@ impl Parser {
             Token::Plus | Token::Minus => 3,
             Token::Multiply | Token::Divide => 4,
             Token::LeftParen => 5,
+            Token::String(_)
+            | Token::Number(_)
+            | Token::Identifier(_)
+            | Token::True
+            | Token::False => {
+                if right_parse {
+                    return 0;
+                } else {
+                    panic!("Invalid hanging literal: {:?}", self.current());
+                }
+            }
             _ => 0,
         }
     }

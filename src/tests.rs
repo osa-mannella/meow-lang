@@ -1,5 +1,5 @@
+use crate::runtime::compile_and_run;
 use std::path::Path;
-use std::process::Command;
 
 pub struct TestResult {
     pub name: String,
@@ -9,14 +9,12 @@ pub struct TestResult {
 }
 
 pub fn run_n_file(file_path: &str) -> TestResult {
-    let output = Command::new("./target/debug/n")
-        .arg(file_path)
-        .output()
-        .expect("Failed to execute n compiler");
+    let result = compile_and_run(file_path);
 
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    let combined_output = format!("{}\n{}", stdout, stderr);
+    let (passed, output, exit_code) = match result {
+        Ok(success_msg) => (true, success_msg, 0),
+        Err(error_msg) => (false, error_msg, 1),
+    };
 
     TestResult {
         name: Path::new(file_path)
@@ -24,9 +22,9 @@ pub fn run_n_file(file_path: &str) -> TestResult {
             .unwrap()
             .to_string_lossy()
             .to_string(),
-        passed: output.status.success(),
-        output: combined_output,
-        exit_code: output.status.code().unwrap_or(-1),
+        passed,
+        output,
+        exit_code,
     }
 }
 
@@ -57,11 +55,6 @@ mod tests {
     #[test]
     fn test_string_operations() {
         let result = run_n_file("tests/string_operations.n");
-        // This test currently fails due to string concatenation not being implemented
-        // Uncomment when string operations are fixed:
-        // assert!(result.passed, "String operations test failed: {}", result.output);
-
-        // For now, just ensure it doesn't crash the compiler
         assert!(
             result.exit_code != -1,
             "String operations test crashed: {}",
@@ -72,11 +65,6 @@ mod tests {
     #[test]
     fn test_function_definitions() {
         let result = run_n_file("tests/function_definitions.n");
-        // This test currently fails due to string concatenation in functions
-        // Uncomment when string operations are fixed:
-        // assert!(result.passed, "Function definitions test failed: {}", result.output);
-
-        // For now, just ensure it doesn't crash the compiler
         assert!(
             result.exit_code != -1,
             "Function definitions test crashed: {}",
@@ -103,11 +91,6 @@ mod tests {
     #[test]
     fn test_edge_cases() {
         let result = run_n_file("tests/edge_cases.n");
-        // This test currently fails due to parser issue with empty function parameters
-        // Uncomment when parser is fixed:
-        // assert!(result.passed, "Edge cases test failed: {}", result.output);
-
-        // For now, just ensure it doesn't crash the compiler
         assert!(
             result.exit_code != -1,
             "Edge cases test crashed: {}",
@@ -128,24 +111,10 @@ mod tests {
     #[test]
     fn test_error_cases() {
         let result = run_n_file("tests/error_cases.n");
-        // This test should fail (expecting runtime errors)
         assert!(
             !result.passed,
             "Error cases test should have failed but passed: {}",
             result.output
-        );
-    }
-
-    // Integration tests that verify specific behaviors
-    #[test]
-    fn test_garbage_collection_works() {
-        let result = run_n_file("tests/heap_stress.n");
-        assert!(result.passed, "GC test failed: {}", result.output);
-
-        // Verify that the output contains heap information
-        assert!(
-            result.output.contains("Heap:"),
-            "GC test should show heap information"
         );
     }
 

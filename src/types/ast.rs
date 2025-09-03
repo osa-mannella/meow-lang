@@ -3,9 +3,30 @@ pub enum Expr {
     Identifier(String),
     Number(f64),
     String(String),
-    Binary { left: Box<Expr>, op: BinaryOp, right: Box<Expr> },
-    Call { func: Box<Expr>, args: Vec<Expr> },
-    Pipeline { left: Box<Expr>, right: Box<Expr> },
+    Boolean(bool),
+    Unary {
+        op: UnaryOp,
+        right: Box<Expr>,
+    },
+    Binary {
+        left: Box<Expr>,
+        op: BinaryOp,
+        right: Box<Expr>,
+    },
+    Call {
+        func: Box<Expr>,
+        args: Vec<Expr>,
+    },
+    Pipeline {
+        left: Box<Expr>,
+        right: Box<Expr>,
+    },
+}
+
+#[derive(Debug, Clone)]
+pub enum UnaryOp {
+    Neg, // Unary minus
+    Not, // Logical not
 }
 
 #[derive(Debug, Clone)]
@@ -24,8 +45,15 @@ pub enum BinaryOp {
 
 #[derive(Debug, Clone)]
 pub enum Stmt {
-    Let { name: String, value: Expr },
-    Func { name: String, params: Vec<String>, body: Vec<Stmt> },
+    Let {
+        name: String,
+        value: Expr,
+    },
+    Func {
+        name: String,
+        params: Vec<String>,
+        body: Vec<Stmt>,
+    },
     Expr(Expr),
 }
 

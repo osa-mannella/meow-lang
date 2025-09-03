@@ -8,15 +8,87 @@ mod types;
 #[cfg(test)]
 mod tests;
 
-use compiler::Compiler;
-use interpreter::VirtualMachine;
-use lexer::Lexer;
-use parser::Parser;
-use std::env;
-use std::fs;
-use std::process;
+pub mod runtime {
+    use crate::compiler::Compiler;
+    use crate::interpreter::VirtualMachine;
+    use crate::lexer::Lexer;
+    use crate::parser::Parser;
 
-use crate::debug::print_tokens;
+    pub fn compile_and_run(filename: &str) -> Result<String, String> {
+        compile_and_run_with_debug(filename, false)
+    }
+
+    pub fn compile_and_run_with_debug(filename: &str, debug: bool) -> Result<String, String> {
+        // Check if file ends with .n extension
+        if !filename.ends_with(".n") {
+            return Err("Error: File must have .n extension".to_string());
+        }
+
+        // Read the file
+        let source_code = match std::fs::read_to_string(filename) {
+            Ok(content) => content,
+            Err(err) => {
+                return Err(format!("Error reading file '{}': {}", filename, err));
+            }
+        };
+
+        if debug {
+            println!("--- Source Code ---\n{}", source_code);
+        }
+
+        let mut lexer = Lexer::new(source_code);
+        let tokens = lexer.tokenize();
+
+        if debug {
+            println!("--- Tokens ---");
+            for token in &tokens {
+                println!("{:?}", token);
+            }
+        }
+
+        let mut parser = Parser::new(tokens);
+        let ast = parser.parse();
+
+        if debug {
+            println!("--- AST ---");
+            // Assuming AST implements Debug
+            println!("{:#?}", ast);
+        }
+
+        let mut compiler = Compiler::new();
+        let bytecode = compiler.compile(&ast);
+
+        if debug {
+            println!("--- Bytecode ---");
+            // Assuming bytecode implements Debug or Display
+            println!("{:#?}", bytecode);
+        }
+
+        let mut vm = VirtualMachine::new(bytecode);
+
+        if debug {
+            println!("--- Runtime ---");
+        }
+
+        match vm.run() {
+            Ok(()) => {
+                if debug {
+                    println!("Program executed successfully");
+                }
+                Ok("Program executed successfully".to_string())
+            }
+            Err(e) => {
+                if debug {
+                    println!("Runtime error: {}", e);
+                }
+                Err(format!("Runtime error: {}", e))
+            }
+        }
+    }
+}
+
+use std::env;
+use std::process;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -28,52 +100,13 @@ fn main() {
 
     let filename = &args[1];
 
-    // Check if file ends with .n extension
-    if !filename.ends_with(".n") {
-        eprintln!("Error: File must have .n extension");
-        process::exit(1);
-    }
-
-    // Read the file
-    let source_code = match fs::read_to_string(filename) {
-        Ok(content) => content,
-        Err(err) => {
-            eprintln!("Error reading file '{}': {}", filename, err);
-            process::exit(1);
-        }
-    };
-
-    //println!("=== n Parser ===");
-    //println!("File: {}", filename);
-    //println!();
-
-    let mut lexer = Lexer::new(source_code);
-    let tokens = lexer.tokenize();
-
-    //print_tokens(&tokens);
-
-    let mut parser = Parser::new(tokens);
-    let ast = parser.parse();
-
-    //println!("=== AST ===");
-    //println!("{:#?}", ast);
-
-    let mut compiler = Compiler::new();
-    let bytecode = compiler.compile(&ast);
-
-    //println!();
-    //println!("{}", bytecode);
-
-    println!("=== EXECUTION ===");
-    let mut vm = VirtualMachine::new(bytecode);
-    match vm.run() {
-        Ok(()) => {
-            println!("Program executed successfully");
-            vm.debug_stack();
+    match runtime::compile_and_run_with_debug(filename, true) {
+        Ok(result) => {
+            println!("=== EXECUTION ===");
+            println!("{}", result);
         }
         Err(e) => {
-            eprintln!("Runtime error: {}", e);
-            vm.debug_stack();
+            eprintln!("{}", e);
             process::exit(1);
         }
     }
