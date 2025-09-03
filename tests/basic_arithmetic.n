@@ -6,3 +6,8 @@ let diff = a - b
 let product = a * b
 let quotient = a / b
 let result = sum + diff + product + quotient
+
+// Negative numbers test
+let negative = -5
+let negative_expr = -a
+let complex_neg = -(a + b)
