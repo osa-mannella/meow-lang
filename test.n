@@ -8,4 +8,4 @@ func n(x) {
 
 let a = "hello "
 let b = "world"
-d(a, b) |> n
+let v = d(a, b) |> n

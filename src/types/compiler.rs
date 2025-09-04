@@ -26,6 +26,13 @@ pub enum Instruction {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub enum VarOutput {
+    Created { index: usize, depth: usize },
+    GotCurrentScope { index: usize, depth: usize },
+    GotOuterScope { index: usize, depth: usize },
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub enum Value {
     Number(f64),
     String(String),

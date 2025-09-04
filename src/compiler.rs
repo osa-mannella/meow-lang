@@ -1,6 +1,6 @@
 use crate::types::ast::*;
 use std::collections::HashMap;
-use std::{fmt, process};
+use std::fmt;
 
 use crate::types::compiler::*;
 
@@ -163,7 +163,16 @@ impl Compiler {
         match stmt {
             Stmt::Let { name, value, line } => {
                 self.compile_expression(value)?;
-                let (var_index, _) = self.get_or_create_variable_index(name);
+                let var_index = match self.get_or_create_variable_index(name) {
+                    VarOutput::Created { index, .. } => index,
+                    VarOutput::GotCurrentScope { .. } => {
+                        return Err(format!(
+                            "Variable '{}' is already defined in the current scope",
+                            name
+                        ));
+                    }
+                    VarOutput::GotOuterScope { .. } => self.insert_variable(name),
+                };
 
                 self.push_with_line(Instruction::StoreVar(self.depth, var_index), *line);
                 if last {
@@ -202,7 +211,7 @@ impl Compiler {
                 self.current_function = Some(name.clone());
 
                 for param_name in params.iter() {
-                    self.get_or_create_variable_index(param_name);
+                    let _ = self.get_or_create_variable_index(param_name);
                 }
 
                 for (i, body_stmt) in body.iter().enumerate() {
@@ -242,7 +251,11 @@ impl Compiler {
                 self.push(Instruction::LoadConst(const_index));
             }
             Expr::Identifier(name) => {
-                let (var_index, fetch_depth) = self.get_or_create_variable_index(name);
+                let (var_index, fetch_depth) = match self.get_or_create_variable_index(name) {
+                    VarOutput::Created { index, depth } => (index, depth),
+                    VarOutput::GotCurrentScope { index, depth } => (index, depth),
+                    VarOutput::GotOuterScope { index, depth } => (index, depth),
+                };
                 self.push(Instruction::LoadVar(fetch_depth, var_index));
             }
             Expr::Binary { left, op, right } => {
@@ -291,14 +304,19 @@ impl Compiler {
                         for arg in args.iter().rev() {
                             self.compile_expression(arg)?;
                         }
-
                         if let Expr::Identifier(func_name) = func.as_ref() {
                             if let Some(function_index) = self.functions.get(func_name).cloned() {
                                 self.push(Instruction::Call(function_index));
                             }
                         }
                     }
+                    Expr::Identifier(func_name) => {
+                        if let Some(function_index) = self.functions.get(func_name).cloned() {
+                            self.push(Instruction::Call(function_index));
+                        }
+                    }
                     _ => {
+                        println!("right: {:?}", right);
                         self.compile_expression(right)?;
                     }
                 }
@@ -333,12 +351,19 @@ impl Compiler {
             .unwrap_or(0)
     }
 
-    fn get_or_create_variable_index(&mut self, name: &str) -> (usize, usize) {
+    fn get_or_create_variable_index(&mut self, name: &str) -> VarOutput {
         if let Some((index, depth)) = self.get_variable(name) {
-            (index, depth)
+            if depth == self.depth {
+                VarOutput::GotCurrentScope { index, depth }
+            } else {
+                VarOutput::GotOuterScope { index, depth }
+            }
         } else {
             let index = self.insert_variable(name);
-            (index, self.depth)
+            VarOutput::Created {
+                index,
+                depth: self.depth,
+            }
         }
     }
 }
