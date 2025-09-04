@@ -17,6 +17,12 @@ pub struct Compiler {
 }
 
 impl Compiler {
+    fn resolve_function_index(&self, name: &str) -> Result<usize, String> {
+        self.functions
+            .get(name)
+            .cloned()
+            .ok_or_else(|| format!("Undefined function '{}'", name))
+    }
     pub fn new() -> Self {
         Self {
             constants: Vec::new(),
@@ -295,12 +301,8 @@ impl Compiler {
                 }
 
                 if let Expr::Identifier(func_name) = func.as_ref() {
-                    if let Some(function_index) = self.functions.get(func_name).cloned() {
-                        self.push(Instruction::Call(function_index));
-                    } else {
-                        // Defer to runtime: try to call offset 0, which will fail at runtime
-                        // or simply ignore here and compile callee expression for dynamic resolution when implemented
-                    }
+                    let function_index = self.resolve_function_index(func_name)?;
+                    self.push(Instruction::Call(function_index));
                 } else {
                     self.compile_expression(func)?;
                 }
@@ -314,15 +316,13 @@ impl Compiler {
                             self.compile_expression(arg)?;
                         }
                         if let Expr::Identifier(func_name) = func.as_ref() {
-                            if let Some(function_index) = self.functions.get(func_name).cloned() {
-                                self.push(Instruction::Call(function_index));
-                            }
+                            let function_index = self.resolve_function_index(func_name)?;
+                            self.push(Instruction::Call(function_index));
                         }
                     }
                     Expr::Identifier(func_name) => {
-                        if let Some(function_index) = self.functions.get(func_name).cloned() {
-                            self.push(Instruction::Call(function_index));
-                        }
+                        let function_index = self.resolve_function_index(func_name)?;
+                        self.push(Instruction::Call(function_index));
                     }
                     _ => {
                         println!("right: {:?}", right);
@@ -392,7 +392,7 @@ impl Compiler {
     }
 
     fn push(&mut self, instr: Instruction) {
-        // In expression contexts, we don't have a precise line; reuse last known line or 1.
+        // We do not really care about line number in expressional contexts.
         let line = self.current_line();
         self.instructions.push(instr);
         self.instruction_lines.push(line);
