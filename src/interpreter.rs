@@ -3,7 +3,8 @@ use crate::types::compiler::{ByteCode, HeapObject, Instruction, Value};
 use crate::types::constants::{
     GC_CHECK_INTERVAL, GC_HISTORY_BUFFER_SIZE, GC_THRESHOLD, HEAP_SCORE_ARRAY_BASE,
     HEAP_SCORE_ARRAY_PER_ELEMENT, HEAP_SCORE_MAP_BASE, HEAP_SCORE_MAP_PER_ELEMENT,
-    HEAP_SCORE_OTHER_OBJECT, HEAP_SCORE_STRING_BASE, MAX_STRING_LENGTH, UNDERFLOW_ERROR,
+    HEAP_SCORE_OTHER_OBJECT, HEAP_SCORE_STRING_BASE, INVALID_HEAP_POINTER_ERROR, MAX_STRING_LENGTH,
+    UNDERFLOW_ERROR,
 };
 use crate::types::traits::IntoResult;
 use std::collections::VecDeque;
@@ -279,6 +280,39 @@ impl VirtualMachine {
                 self.heap.push(heap_array);
                 let heap_index = self.heap.len() - 1;
                 self.stack.push(Value::HeapPointer(heap_index));
+            }
+
+            Instruction::ConcatArray => {
+                let right = self.stack.pop().ok_or(UNDERFLOW_ERROR)?;
+                let left = self.stack.pop().ok_or(UNDERFLOW_ERROR)?;
+
+                let (left_idx, right_idx) = match (left, right) {
+                    (Value::HeapPointer(li), Value::HeapPointer(ri)) => (li, ri),
+                    (l, r) => {
+                        return Err(format!(
+                            "Update expects arrays, got {} and {}",
+                            l.type_name(&self.heap),
+                            r.type_name(&self.heap)
+                        ));
+                    }
+                };
+
+                let left_arr = self.heap.get(left_idx).ok_or(INVALID_HEAP_POINTER_ERROR)?;
+                let right_arr = self.heap.get(right_idx).ok_or(INVALID_HEAP_POINTER_ERROR)?;
+
+                match (left_arr, right_arr) {
+                    (HeapObject::Array(left_vec), HeapObject::Array(right_vec)) => {
+                        let mut new_vec = Vec::with_capacity(left_vec.len() + right_vec.len());
+                        new_vec.extend_from_slice(left_vec);
+                        new_vec.extend_from_slice(right_vec);
+                        self.heap.push(HeapObject::Array(new_vec));
+                        let idx = self.heap.len() - 1;
+                        self.stack.push(Value::HeapPointer(idx));
+                    }
+                    _ => {
+                        return Err("Update expects arrays".to_string());
+                    }
+                }
             }
 
             Instruction::Jump(addr) => {

@@ -1,4 +1,4 @@
-use crate::types::{ast::*, constants::Precedence, token::Token};
+use crate::types::{ast::*, token::Token};
 
 pub struct Parser {
     tokens: Vec<Token>,
@@ -26,10 +26,7 @@ impl Parser {
         match self.current() {
             Token::Let | Token::LetBang => self.let_statement(line),
             Token::Func => self.func_statement(line),
-            _ => Ok(Stmt::Expr(
-                self.expression(Precedence::Pipeline.as_u8())?,
-                line,
-            )),
+            _ => Ok(Stmt::Expr(self.expression(1)?, line)),
         }
     }
 
@@ -45,7 +42,7 @@ impl Parser {
             }
         };
         self.expect(Token::Assign)?;
-        let value = self.expression(Precedence::Pipeline.as_u8())?;
+        let value = self.expression(1)?;
         Ok(Stmt::Let { name, value, line })
     }
 
@@ -102,19 +99,19 @@ impl Parser {
             Token::Number(n) => Ok(Expr::Number(n)),
             Token::String(s) => Ok(Expr::String(s)),
             Token::LeftParen => {
-                let expr = self.expression(Precedence::Pipeline.as_u8())?;
+                let expr = self.expression(1)?;
                 self.expect(Token::RightParen)?;
                 Ok(expr)
             }
             Token::Minus => {
-                let right = self.expression(Precedence::Unary.as_u8())?;
+                let right = self.expression(5)?;
                 Ok(Expr::Unary {
                     op: UnaryOp::Neg,
                     right: Box::new(right),
                 })
             }
             Token::Not => {
-                let right = self.expression(Precedence::Unary.as_u8())?;
+                let right = self.expression(5)?;
                 Ok(Expr::Unary {
                     op: UnaryOp::Not,
                     right: Box::new(right),
@@ -131,7 +128,7 @@ impl Parser {
 
                 // Parse array elements [expr, expr, ...]
                 loop {
-                    elements.push(self.expression(Precedence::Pipeline.as_u8())?);
+                    elements.push(self.expression(1)?);
 
                     match self.current() {
                         Token::Comma => {
@@ -189,7 +186,7 @@ impl Parser {
                 self.advance();
                 let mut args = Vec::new();
                 while !matches!(self.current(), Token::RightParen) {
-                    args.push(self.expression(Precedence::Pipeline.as_u8())?);
+                    args.push(self.expression(1)?);
                     if matches!(self.current(), Token::Comma) {
                         self.advance();
                     }
@@ -211,7 +208,9 @@ impl Parser {
             Token::Update => {
                 self.advance();
                 // Make update right-associative: parse RHS with same precedence
+                println!("{:?}", self.current());
                 let right = self.expression(self.precedence(true)?)?;
+
                 Ok(Expr::Update {
                     left: Box::new(left),
                     right: Box::new(right),
@@ -243,16 +242,16 @@ impl Parser {
 
     fn precedence(&self, right_parse: bool) -> Result<u8, String> {
         match self.current() {
-            Token::Pipeline | Token::Update => Ok(Precedence::Pipeline.as_u8()),
+            Token::Pipeline | Token::Update => Ok(1),
             Token::Equal
             | Token::NotEqual
             | Token::Less
             | Token::Greater
             | Token::LessEqual
-            | Token::GreaterEqual => Ok(Precedence::Comparison.as_u8()),
-            Token::Plus | Token::Minus => Ok(Precedence::Term.as_u8()),
-            Token::Multiply | Token::Divide => Ok(Precedence::Factor.as_u8()),
-            Token::LeftParen => Ok(Precedence::Unary.as_u8()),
+            | Token::GreaterEqual => Ok(2),
+            Token::Plus | Token::Minus => Ok(3),
+            Token::Multiply | Token::Divide => Ok(4),
+            Token::LeftParen => Ok(5),
             Token::String(_)
             | Token::Number(_)
             | Token::Identifier(_)
@@ -261,7 +260,7 @@ impl Parser {
             | Token::LeftBracket
             | Token::LeftBrace => {
                 if right_parse {
-                    return Ok(Precedence::Lowest.as_u8());
+                    return Ok(1);
                 } else {
                     return Err(format!(
                         "Invalid hanging literal: {:?} at line {}",
@@ -270,7 +269,7 @@ impl Parser {
                     ));
                 }
             }
-            _ => Ok(Precedence::Lowest.as_u8()),
+            _ => Ok(0),
         }
     }
 

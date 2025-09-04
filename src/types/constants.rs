@@ -1,4 +1,5 @@
 pub const UNDERFLOW_ERROR: &str = "Stack underflow";
+pub const INVALID_HEAP_POINTER_ERROR: &str = "Invalid heap pointer";
 
 // Garbage Collection Configuration
 pub const GC_CHECK_INTERVAL: usize = 12;

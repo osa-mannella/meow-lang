@@ -23,3 +23,8 @@ let booleans = [true, false, !true]
 
 // Test string arrays  
 let strings = ["first", "second", "third"]
+
+// Test array update (concatenation)
+let concat1 = [1, 2] <- [3, 4]
+let concat2 = [] <- [5]
+let concat3 = ["a"] <- ["b", "c"]

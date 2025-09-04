@@ -342,10 +342,10 @@ impl Compiler {
                 }
             },
             Expr::Update { left, right } => {
-                // Placeholder semantics: compile children and discard; to be implemented
+                // Compile left and right arrays onto the stack, then concatenate
                 self.compile_expression(left)?;
                 self.compile_expression(right)?;
-                self.push(Instruction::Pop);
+                self.push(Instruction::ConcatArray);
             }
             Expr::Array { elements } => {
                 for element in elements.iter() {
@@ -423,6 +423,7 @@ impl fmt::Display for Instruction {
             Instruction::Greater => write!(f, "GREATER"),
             Instruction::Not => write!(f, "NOT"),
             Instruction::CreateArray(size) => write!(f, "CREATE_ARRAY {}", size),
+            Instruction::ConcatArray => write!(f, "CONCAT_ARRAY"),
             Instruction::Jump(addr) => write!(f, "JUMP {}", addr),
             Instruction::JumpIfFalse(addr) => write!(f, "JUMP_IF_FALSE {}", addr),
             Instruction::JumpIfTrue(addr) => write!(f, "JUMP_IF_TRUE {}", addr),

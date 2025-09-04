@@ -18,6 +18,7 @@ pub enum Instruction {
     Greater = 0x16,
     Not = 0x17,
     CreateArray(usize) = 0x18, // Create array with N elements from stack
+    ConcatArray = 0x19,        // Pop two arrays, concatenate, push result
     Jump(usize) = 0x20,
     JumpIfFalse(usize) = 0x21,
     JumpIfTrue(usize) = 0x22,
