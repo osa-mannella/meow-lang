@@ -321,20 +321,17 @@ impl Compiler {
                     }
                 }
             }
-            Expr::Unary { op, right } => {
-                match op {
-                    UnaryOp::Neg => {
-                        self.push(Instruction::Push(Value::Number(0.0)));
-                        self.compile_expression(right)?;
-                        self.push(Instruction::Sub);
-                    }
-                    UnaryOp::Not => {
-                        // For now, just compile the right operand
-                        // TODO: Implement logical not when we have boolean operations
-                        self.compile_expression(right)?;
-                    }
+            Expr::Unary { op, right } => match op {
+                UnaryOp::Neg => {
+                    self.push(Instruction::Push(Value::Number(0.0)));
+                    self.compile_expression(right)?;
+                    self.push(Instruction::Sub);
                 }
-            }
+                UnaryOp::Not => {
+                    self.compile_expression(right)?;
+                    self.push(Instruction::Not);
+                }
+            },
         }
         Ok(())
     }
@@ -403,6 +400,7 @@ impl fmt::Display for Instruction {
             Instruction::Equal => write!(f, "EQUAL"),
             Instruction::Less => write!(f, "LESS"),
             Instruction::Greater => write!(f, "GREATER"),
+            Instruction::Not => write!(f, "NOT"),
             Instruction::Jump(addr) => write!(f, "JUMP {}", addr),
             Instruction::JumpIfFalse(addr) => write!(f, "JUMP_IF_FALSE {}", addr),
             Instruction::JumpIfTrue(addr) => write!(f, "JUMP_IF_TRUE {}", addr),

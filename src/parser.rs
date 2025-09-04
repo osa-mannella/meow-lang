@@ -102,6 +102,13 @@ impl Parser {
                     right: Box::new(right),
                 }
             }
+            Token::Not => {
+                let right = self.expression(5);
+                Expr::Unary {
+                    op: UnaryOp::Not,
+                    right: Box::new(right),
+                }
+            }
             Token::True => Expr::Boolean(true),
             Token::False => Expr::Boolean(false),
             t => {

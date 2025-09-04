@@ -1,5 +1,6 @@
 use crate::compiler::Compiler;
 use crate::types::compiler::{ByteCode, HeapObject, Instruction, Value};
+use crate::types::constants::UNDERFLOW_ERROR;
 use crate::types::traits::IntoResult;
 use std::collections::VecDeque;
 
@@ -164,7 +165,7 @@ impl VirtualMachine {
             }
 
             Instruction::StoreVar(_, var_index) => {
-                let value = self.stack.pop().ok_or("Stack underflow")?;
+                let value = self.stack.pop().ok_or(UNDERFLOW_ERROR)?;
 
                 self.set_variable(*var_index, value)?;
             }
@@ -185,8 +186,8 @@ impl VirtualMachine {
             }
 
             Instruction::Add => {
-                let b = self.stack.pop().ok_or("Stack underflow")?;
-                let a = self.stack.pop().ok_or("Stack underflow")?;
+                let b = self.stack.pop().ok_or(UNDERFLOW_ERROR)?;
+                let a = self.stack.pop().ok_or(UNDERFLOW_ERROR)?;
 
                 match (&a, &b) {
                     (Value::Number(a_num), Value::Number(b_num)) => {
@@ -228,7 +229,7 @@ impl VirtualMachine {
             }
 
             Instruction::Equal => {
-                const STACK_UNDERFLOW: &str = "Stack underflow";
+                const STACK_UNDERFLOW: &str = UNDERFLOW_ERROR;
                 let b: Value = self.stack.pop().ok_or(STACK_UNDERFLOW)?;
                 let a: Value = self.stack.pop().ok_or(STACK_UNDERFLOW)?;
                 let result = self.values_equal(&a, &b);
@@ -248,6 +249,21 @@ impl VirtualMachine {
                 let a: f64 = self.pop_value()?;
                 self.stack
                     .push(Value::Boolean(if a > b { true } else { false }));
+            }
+
+            Instruction::Not => {
+                let value = self.stack.pop().ok_or(UNDERFLOW_ERROR)?;
+                match value {
+                    Value::Boolean(b) => {
+                        self.stack.push(Value::Boolean(!b));
+                    }
+                    _ => {
+                        return Err(format!(
+                            "Logical NOT operation requires boolean operand, got {}",
+                            value.type_name_stack()
+                        ));
+                    }
+                }
             }
 
             Instruction::Jump(addr) => {
@@ -304,11 +320,11 @@ impl VirtualMachine {
             }
 
             Instruction::Pop => {
-                self.stack.pop().ok_or("Stack underflow")?;
+                self.stack.pop().ok_or(UNDERFLOW_ERROR)?;
             }
 
             Instruction::Dup => {
-                let value = self.stack.last().ok_or("Stack underflow")?.clone();
+                let value = self.stack.last().ok_or(UNDERFLOW_ERROR)?.clone();
                 self.stack.push(value);
             }
 
@@ -375,7 +391,7 @@ impl VirtualMachine {
     {
         match self.stack.pop() {
             Some(value) => value.into_result(),
-            None => Err("Stack underflow".to_string()),
+            None => Err(UNDERFLOW_ERROR.to_string()),
         }
     }
 

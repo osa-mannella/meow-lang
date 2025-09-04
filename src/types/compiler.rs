@@ -16,6 +16,7 @@ pub enum Instruction {
     Equal = 0x14,
     Less = 0x15,
     Greater = 0x16,
+    Not = 0x17,
     Jump(usize) = 0x20,
     JumpIfFalse(usize) = 0x21,
     JumpIfTrue(usize) = 0x22,

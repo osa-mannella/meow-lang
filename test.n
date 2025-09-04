@@ -1,11 +1,1 @@
-func d(a, b) {
-    "hello " + a + b
-}
-
-func n(x) {
-    x
-}
-
-let a = "hello "
-let b = "world"
-let v = d(a, b) |> n
+let n = !true
