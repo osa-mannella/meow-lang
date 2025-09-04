@@ -56,7 +56,10 @@ pub mod runtime {
         }
 
         let mut compiler = Compiler::new();
-        let bytecode = compiler.compile(&ast);
+        let bytecode = match compiler.compile(&ast) {
+            Ok(bc) => bc,
+            Err(e) => return Err(format!("Compile error: {}", e)),
+        };
 
         if debug {
             println!("--- Bytecode ---\n");

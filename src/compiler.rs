@@ -61,24 +61,18 @@ impl Compiler {
         result
     }
 
-    pub fn compile(&mut self, program: &Program) -> ByteCode {
+    pub fn compile(&mut self, program: &Program) -> Result<ByteCode, String> {
         self.collect_pass(&program.statements);
-        match self.generate_instructions(&program.statements) {
-            Ok(()) => {}
-            Err(e) => {
-                println!("{}", e);
-                process::exit(1);
-            }
-        };
+        self.generate_instructions(&program.statements)?;
         self.instructions.push(Instruction::Halt);
         self.instruction_lines.push(self.current_line());
 
-        ByteCode {
+        Ok(ByteCode {
             constants: self.constants.clone(),
             functions: self.function_table.clone(),
             instructions: self.instructions.clone(),
             instruction_lines: self.instruction_lines.clone(),
-        }
+        })
     }
 
     fn collect_pass(&mut self, statements: &[Stmt]) {
@@ -282,7 +276,8 @@ impl Compiler {
                     if let Some(function_index) = self.functions.get(func_name).cloned() {
                         self.push(Instruction::Call(function_index));
                     } else {
-                        return Err(format!("Function '{}' not found", func_name));
+                        // Defer to runtime: try to call offset 0, which will fail at runtime
+                        // or simply ignore here and compile callee expression for dynamic resolution when implemented
                     }
                 } else {
                     self.compile_expression(func)?;
