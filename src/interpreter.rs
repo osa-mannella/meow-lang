@@ -1,11 +1,12 @@
 use crate::compiler::Compiler;
 use crate::types::compiler::{ByteCode, HeapObject, Instruction, Value};
-use crate::types::constants::UNDERFLOW_ERROR;
+use crate::types::constants::{
+    GC_CHECK_INTERVAL, GC_HISTORY_BUFFER_SIZE, GC_THRESHOLD, HEAP_SCORE_ARRAY_BASE,
+    HEAP_SCORE_ARRAY_PER_ELEMENT, HEAP_SCORE_MAP_BASE, HEAP_SCORE_MAP_PER_ELEMENT,
+    HEAP_SCORE_OTHER_OBJECT, HEAP_SCORE_STRING_BASE, MAX_STRING_LENGTH, UNDERFLOW_ERROR,
+};
 use crate::types::traits::IntoResult;
 use std::collections::VecDeque;
-
-const GC_CHECK_INTERVAL: usize = 12;
-const GC_THRESHOLD: usize = 4000;
 
 #[derive(Debug, Clone)]
 pub struct StackFrame {
@@ -108,21 +109,21 @@ impl VirtualMachine {
         for obj in &self.heap {
             match obj {
                 HeapObject::Array(arr) => {
-                    heap_score += 16 + arr.len() * 8;
+                    heap_score += HEAP_SCORE_ARRAY_BASE + arr.len() * HEAP_SCORE_ARRAY_PER_ELEMENT;
                 }
                 HeapObject::String(s) => {
-                    heap_score += 24 + s.len();
+                    heap_score += HEAP_SCORE_STRING_BASE + s.len();
                 }
                 HeapObject::Object(map) => {
-                    heap_score += 32 + map.len() * 16;
+                    heap_score += HEAP_SCORE_MAP_BASE + map.len() * HEAP_SCORE_MAP_PER_ELEMENT;
                 }
                 _ => {
-                    heap_score += 32;
+                    heap_score += HEAP_SCORE_OTHER_OBJECT;
                 }
             }
         }
         self.last_heap_score.push_back(heap_score);
-        if self.last_heap_score.len() > 10 {
+        if self.last_heap_score.len() > GC_HISTORY_BUFFER_SIZE {
             self.last_heap_score.pop_front();
         }
         heap_score
@@ -357,7 +358,6 @@ impl VirtualMachine {
     }
 
     fn heap_push(&mut self, value: Value) -> Option<Value> {
-        const MAX_STRING_LENGTH: usize = 1024;
         let heap_index = match &value {
             Value::String(s) if s.len() > MAX_STRING_LENGTH => {
                 let heap_obj = HeapObject::String(s.clone());
