@@ -47,7 +47,10 @@ pub mod runtime {
         }
 
         let mut parser = Parser::new(tokens);
-        let ast = parser.parse();
+        let ast = match parser.parse() {
+            Ok(ast) => ast,
+            Err(e) => return Err(format!("Parse error: {}", e)),
+        };
 
         if debug {
             println!("--- AST ---");
