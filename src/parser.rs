@@ -24,14 +24,15 @@ impl Parser {
     }
 
     fn statement(&mut self) -> Stmt {
+        let line = self.current_line();
         match self.current() {
-            Token::Let | Token::LetBang => self.let_statement(),
-            Token::Func => self.func_statement(),
-            _ => Stmt::Expr(self.expression(MIN_PREC_DEFAULT)),
+            Token::Let | Token::LetBang => self.let_statement(line),
+            Token::Func => self.func_statement(line),
+            _ => Stmt::Expr(self.expression(MIN_PREC_DEFAULT), line),
         }
     }
 
-    fn let_statement(&mut self) -> Stmt {
+    fn let_statement(&mut self, line: usize) -> Stmt {
         self.advance();
         let name = match self.advance() {
             Token::Identifier(n) => n,
@@ -39,10 +40,10 @@ impl Parser {
         };
         self.expect(Token::Assign);
         let value = self.expression(MIN_PREC_DEFAULT);
-        Stmt::Let { name, value }
+        Stmt::Let { name, value, line }
     }
 
-    fn func_statement(&mut self) -> Stmt {
+    fn func_statement(&mut self, line: usize) -> Stmt {
         self.advance();
         let name = match self.advance() {
             Token::Identifier(n) => n,
@@ -68,7 +69,12 @@ impl Parser {
             }
         }
         self.expect(Token::RightBrace);
-        Stmt::Func { name, params, body }
+        Stmt::Func {
+            name,
+            params,
+            body,
+            line,
+        }
     }
 
     fn expression(&mut self, min_prec: u8) -> Expr {
@@ -223,5 +229,15 @@ impl Parser {
     fn is_at_end(&mut self) -> bool {
         self.skip_newlines();
         matches!(self.current(), Token::Eof)
+    }
+
+    fn current_line(&self) -> usize {
+        let mut line = 1;
+        for t in self.tokens.iter().take(self.pos) {
+            if matches!(t, Token::Newline) {
+                line += 1;
+            }
+        }
+        line
     }
 }

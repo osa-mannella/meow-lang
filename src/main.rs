@@ -78,7 +78,7 @@ pub mod runtime {
             }
         }
 
-        let mut vm = VirtualMachine::new(bytecode);
+        let mut vm = VirtualMachine::new(bytecode, compiler);
 
         if debug {
             println!("--- Runtime ---");

@@ -76,4 +76,5 @@ pub struct ByteCode {
     pub constants: Vec<Value>,
     pub functions: Vec<Value>,
     pub instructions: Vec<Instruction>,
+    pub instruction_lines: Vec<usize>,
 }

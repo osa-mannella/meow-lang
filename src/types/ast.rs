@@ -48,13 +48,15 @@ pub enum Stmt {
     Let {
         name: String,
         value: Expr,
+        line: usize,
     },
     Func {
         name: String,
         params: Vec<String>,
         body: Vec<Stmt>,
+        line: usize,
     },
-    Expr(Expr),
+    Expr(Expr, usize),
 }
 
 #[derive(Debug, Clone)]

@@ -1,18 +1,19 @@
 use crate::types::ast::*;
 use std::collections::HashMap;
-use std::fmt;
+use std::{fmt, process};
 
 use crate::types::compiler::*;
 
 pub struct Compiler {
-    constants: Vec<Value>,
-    functions: HashMap<String, usize>,
-    function_table: Vec<Value>,
-    variables: Vec<HashMap<String, usize>>,
-    instructions: Vec<Instruction>,
-    current_function: Option<String>,
-    depth: usize,
-    in_new_function: bool,
+    pub constants: Vec<Value>,
+    pub functions: HashMap<String, usize>,
+    pub function_table: Vec<Value>,
+    pub variables: Vec<HashMap<String, usize>>,
+    pub instructions: Vec<Instruction>,
+    pub instruction_lines: Vec<usize>,
+    pub current_function: Option<String>,
+    pub depth: usize,
+    pub in_new_function: bool,
 }
 
 impl Compiler {
@@ -24,6 +25,7 @@ impl Compiler {
             variables: Vec::new(),
             depth: 0,
             instructions: Vec::new(),
+            instruction_lines: Vec::new(),
             current_function: None,
             in_new_function: false,
         }
@@ -61,20 +63,30 @@ impl Compiler {
 
     pub fn compile(&mut self, program: &Program) -> ByteCode {
         self.collect_pass(&program.statements);
-        self.generate_instructions(&program.statements);
+        match self.generate_instructions(&program.statements) {
+            Ok(()) => {}
+            Err(e) => {
+                println!("{}", e);
+                process::exit(1);
+            }
+        };
         self.instructions.push(Instruction::Halt);
+        self.instruction_lines.push(self.current_line());
 
         ByteCode {
             constants: self.constants.clone(),
             functions: self.function_table.clone(),
             instructions: self.instructions.clone(),
+            instruction_lines: self.instruction_lines.clone(),
         }
     }
 
     fn collect_pass(&mut self, statements: &[Stmt]) {
         for stmt in statements {
             match stmt {
-                Stmt::Func { name, params, body } => {
+                Stmt::Func {
+                    name, params, body, ..
+                } => {
                     let function_index = self.function_table.len();
                     self.functions.insert(name.clone(), function_index);
 
@@ -88,7 +100,7 @@ impl Compiler {
                 Stmt::Let { value, .. } => {
                     self.collect_constants_from_expr(value);
                 }
-                Stmt::Expr(expr) => {
+                Stmt::Expr(expr, _) => {
                     self.collect_constants_from_expr(expr);
                 }
             }
@@ -146,28 +158,32 @@ impl Compiler {
         }
     }
 
-    fn generate_instructions(&mut self, statements: &[Stmt]) {
+    fn generate_instructions(&mut self, statements: &[Stmt]) -> Result<(), String> {
         for stmt in statements {
-            self.compile_statement(stmt, false);
+            self.compile_statement(stmt, false)?;
         }
+        Ok(())
     }
 
-    fn compile_statement(&mut self, stmt: &Stmt, last: bool) {
+    fn compile_statement(&mut self, stmt: &Stmt, last: bool) -> Result<(), String> {
         match stmt {
-            Stmt::Let { name, value } => {
-                self.compile_expression(value);
+            Stmt::Let { name, value, line } => {
+                self.compile_expression(value)?;
                 let (var_index, _) = self.get_or_create_variable_index(name);
 
-                self.instructions
-                    .push(Instruction::StoreVar(self.depth, var_index));
+                self.push_with_line(Instruction::StoreVar(self.depth, var_index), *line);
                 if last {
-                    self.instructions
-                        .push(Instruction::Push(Value::Number(0.0))); // TEMP MEASURE, REPLACE THIS ONCE ENUMS ARE IMPLEMENTED PLEASE !!!
+                    self.push_with_line(Instruction::Push(Value::Number(0.0)), *line); // TEMP MEASURE, REPLACE THIS ONCE ENUMS ARE IMPLEMENTED PLEASE !!!
                 }
             }
-            Stmt::Func { name, params, body } => {
+            Stmt::Func {
+                name,
+                params,
+                body,
+                line,
+            } => {
                 let jump_over_function = self.instructions.len();
-                self.instructions.push(Instruction::Jump(0));
+                self.push_with_line(Instruction::Jump(0), *line);
                 self.depth += 1;
                 self.in_new_function = true;
                 if let Some(function_index) = self.functions.get(name).cloned() {
@@ -182,7 +198,7 @@ impl Compiler {
                         };
 
                         if param_count > 0 {
-                            self.instructions.push(Instruction::LoadArg(param_count));
+                            self.push_with_line(Instruction::LoadArg(param_count), *line);
                         }
                     }
                 }
@@ -197,115 +213,117 @@ impl Compiler {
 
                 for (i, body_stmt) in body.iter().enumerate() {
                     let last = i == body.len() - 1;
-                    self.compile_statement(body_stmt, last);
+                    self.compile_statement(body_stmt, last)?;
                 }
                 self.depth -= 1;
 
-                self.instructions.push(Instruction::Return);
+                self.push_with_line(Instruction::Return, *line);
                 self.current_function = old_function;
 
                 let after_function = self.instructions.len();
                 self.instructions[jump_over_function] = Instruction::Jump(after_function);
             }
-            Stmt::Expr(expr) => {
-                self.compile_expression(expr);
+            Stmt::Expr(expr, line) => {
+                self.compile_expression(expr)?;
                 if !last {
-                    self.instructions.push(Instruction::Pop);
+                    self.push_with_line(Instruction::Pop, *line);
                 }
             }
         }
+        Ok(())
     }
 
-    fn compile_expression(&mut self, expr: &Expr) {
+    fn compile_expression(&mut self, expr: &Expr) -> Result<(), String> {
         match expr {
             Expr::Boolean(b) => {
                 let const_index = self.get_constant_index(&Value::Boolean(*b));
-                self.instructions.push(Instruction::LoadConst(const_index));
+                self.push(Instruction::LoadConst(const_index));
             }
             Expr::Number(n) => {
                 let const_index = self.get_constant_index(&Value::Number(*n));
-                self.instructions.push(Instruction::LoadConst(const_index));
+                self.push(Instruction::LoadConst(const_index));
             }
             Expr::String(s) => {
                 let const_index = self.get_constant_index(&Value::String(s.clone()));
-                self.instructions.push(Instruction::LoadConst(const_index));
+                self.push(Instruction::LoadConst(const_index));
             }
             Expr::Identifier(name) => {
                 let (var_index, fetch_depth) = self.get_or_create_variable_index(name);
-                self.instructions
-                    .push(Instruction::LoadVar(fetch_depth, var_index));
+                self.push(Instruction::LoadVar(fetch_depth, var_index));
             }
             Expr::Binary { left, op, right } => {
-                self.compile_expression(left);
-                self.compile_expression(right);
+                self.compile_expression(left)?;
+                self.compile_expression(right)?;
                 match op {
-                    BinaryOp::Add => self.instructions.push(Instruction::Add),
-                    BinaryOp::Sub => self.instructions.push(Instruction::Sub),
-                    BinaryOp::Mul => self.instructions.push(Instruction::Mul),
-                    BinaryOp::Div => self.instructions.push(Instruction::Div),
-                    BinaryOp::Eq => self.instructions.push(Instruction::Equal),
-                    BinaryOp::Lt => self.instructions.push(Instruction::Less),
-                    BinaryOp::Gt => self.instructions.push(Instruction::Greater),
+                    BinaryOp::Add => self.push(Instruction::Add),
+                    BinaryOp::Sub => self.push(Instruction::Sub),
+                    BinaryOp::Mul => self.push(Instruction::Mul),
+                    BinaryOp::Div => self.push(Instruction::Div),
+                    BinaryOp::Eq => self.push(Instruction::Equal),
+                    BinaryOp::Lt => self.push(Instruction::Less),
+                    BinaryOp::Gt => self.push(Instruction::Greater),
                     BinaryOp::Ne => {
-                        self.instructions.push(Instruction::Equal);
+                        self.push(Instruction::Equal);
                     }
                     BinaryOp::Le => {
-                        self.instructions.push(Instruction::Greater);
+                        self.push(Instruction::Greater);
                     }
                     BinaryOp::Ge => {
-                        self.instructions.push(Instruction::Less);
+                        self.push(Instruction::Less);
                     }
                 }
             }
             Expr::Call { func, args } => {
                 for arg in args.iter().rev() {
-                    self.compile_expression(arg);
+                    self.compile_expression(arg)?;
                 }
 
                 if let Expr::Identifier(func_name) = func.as_ref() {
                     if let Some(function_index) = self.functions.get(func_name).cloned() {
-                        self.instructions.push(Instruction::Call(function_index));
+                        self.push(Instruction::Call(function_index));
+                    } else {
+                        return Err(format!("Function '{}' not found", func_name));
                     }
                 } else {
-                    self.compile_expression(func);
+                    self.compile_expression(func)?;
                 }
             }
             Expr::Pipeline { left, right } => {
-                self.compile_expression(left);
+                self.compile_expression(left)?;
 
                 match right.as_ref() {
                     Expr::Call { func, args } => {
                         for arg in args.iter().rev() {
-                            self.compile_expression(arg);
+                            self.compile_expression(arg)?;
                         }
 
                         if let Expr::Identifier(func_name) = func.as_ref() {
                             if let Some(function_index) = self.functions.get(func_name).cloned() {
-                                self.instructions.push(Instruction::Call(function_index));
+                                self.push(Instruction::Call(function_index));
                             }
                         }
                     }
                     _ => {
-                        self.compile_expression(right);
+                        self.compile_expression(right)?;
                     }
                 }
             }
             Expr::Unary { op, right } => {
                 match op {
                     UnaryOp::Neg => {
-                        self.instructions
-                            .push(Instruction::Push(Value::Number(0.0)));
-                        self.compile_expression(right);
-                        self.instructions.push(Instruction::Sub);
+                        self.push(Instruction::Push(Value::Number(0.0)));
+                        self.compile_expression(right)?;
+                        self.push(Instruction::Sub);
                     }
                     UnaryOp::Not => {
                         // For now, just compile the right operand
                         // TODO: Implement logical not when we have boolean operations
-                        self.compile_expression(right);
+                        self.compile_expression(right)?;
                     }
                 }
             }
         }
+        Ok(())
     }
 
     fn get_constant_index(&self, value: &Value) -> usize {
@@ -327,6 +345,24 @@ impl Compiler {
             let index = self.insert_variable(name);
             (index, self.depth)
         }
+    }
+}
+
+impl Compiler {
+    fn current_line(&self) -> usize {
+        *self.instruction_lines.last().unwrap_or(&1)
+    }
+
+    fn push(&mut self, instr: Instruction) {
+        // In expression contexts, we don't have a precise line; reuse last known line or 1.
+        let line = self.current_line();
+        self.instructions.push(instr);
+        self.instruction_lines.push(line);
+    }
+
+    fn push_with_line(&mut self, instr: Instruction, line: usize) {
+        self.instructions.push(instr);
+        self.instruction_lines.push(line);
     }
 }
 

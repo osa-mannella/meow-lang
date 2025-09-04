@@ -1,3 +1,4 @@
+use crate::compiler::Compiler;
 use crate::types::compiler::{ByteCode, HeapObject, Instruction, Value};
 use crate::types::traits::IntoResult;
 use std::collections::VecDeque;
@@ -37,20 +38,24 @@ pub struct VirtualMachine {
     constants: Vec<Value>,
     functions: Vec<Value>,
     instructions: Vec<Instruction>,
+    instruction_lines: Vec<usize>,
     heap: Vec<HeapObject>,
     last_heap_score: VecDeque<usize>,
+    raw_compiler: Compiler,
 }
 
 impl VirtualMachine {
-    pub fn new(bytecode: ByteCode) -> Self {
+    pub fn new(bytecode: ByteCode, compiler: Compiler) -> Self {
         let vm = Self {
             stack: Vec::new(),
             stack_frames: vec![StackFrame::new()],
             return_addresses: Vec::new(),
             pc: 0,
+            raw_compiler: compiler,
             constants: bytecode.constants,
             functions: bytecode.functions,
             instructions: bytecode.instructions,
+            instruction_lines: bytecode.instruction_lines,
             heap: Vec::new(),
             last_heap_score: VecDeque::new(),
         };
@@ -132,7 +137,12 @@ impl VirtualMachine {
             }
             match &self.instructions[self.pc] {
                 Instruction::Halt => break,
-                _ => self.execute_instruction()?,
+                _ => {
+                    if let Err(e) = self.execute_instruction() {
+                        let line = self.instruction_lines.get(self.pc).cloned().unwrap_or(0);
+                        return Err(format!("[line {}] {}", line, e));
+                    }
+                }
             }
         }
         Ok(())
@@ -159,8 +169,8 @@ impl VirtualMachine {
                 self.set_variable(*var_index, value)?;
             }
 
-            Instruction::LoadVar(_, var_index) => {
-                let value = self.resolve_variable(*var_index)?;
+            Instruction::LoadVar(depth, var_index) => {
+                let value = self.resolve_variable(*depth, *var_index)?;
                 self.stack.push(value);
             }
 
@@ -223,7 +233,7 @@ impl VirtualMachine {
                 let a: Value = self.stack.pop().ok_or(STACK_UNDERFLOW)?;
                 let result = self.values_equal(&a, &b);
                 self.stack
-                    .push(Value::Number(if result { 1.0 } else { 0.0 }));
+                    .push(Value::Boolean(if result { true } else { false }));
             }
 
             Instruction::Less => {
@@ -311,13 +321,22 @@ impl VirtualMachine {
         Ok(())
     }
 
-    fn resolve_variable(&self, var_index: usize) -> Result<Value, String> {
+    fn resolve_variable(&self, depth: usize, var_index: usize) -> Result<Value, String> {
         for frame in self.stack_frames.iter().rev() {
             if let Some(value) = frame.get_variable(var_index) {
                 return Ok(value.clone());
             }
         }
-
+        if let Some(scope) = self.raw_compiler.variables.get(depth) {
+            for (name, idx) in scope.iter() {
+                if *idx == var_index {
+                    return Err(format!(
+                        "Variable '{}' (index {}) not found",
+                        name, var_index
+                    ));
+                }
+            }
+        }
         Err(format!("Variable with index {} not found", var_index))
     }
 
